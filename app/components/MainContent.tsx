@@ -11,12 +11,19 @@ import { usePathname } from 'next/navigation';
 export default function MainContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isAdminPage = pathname === '/admin';
+  const isWelcomePage = pathname === '/welcome';
+
+  // Geen wrapper voor welcome pagina (gebruikt fixed positioning)
+  if (isWelcomePage) {
+    return <>{children}</>;
+  }
 
   return (
-    <main className={isAdminPage ? '' : 'pb-16 md:pb-0'}>
+    <main className={isAdminPage ? '' : 'pb-20 md:pb-0'}>
       {children}
     </main>
   );
 }
+
 
 
