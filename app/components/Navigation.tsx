@@ -50,7 +50,7 @@ export default function Navigation() {
               <NavLink href="/planning" isActive={isActive('/planning')}>
                 Planning
               </NavLink>
-              <NavLink href="/availability" isActive={isActive('/availability')}>
+              <NavLink href="/beschikbaarheid" isActive={isActive('/beschikbaarheid')}>
                 Beschikbaarheid
               </NavLink>
             </div>
@@ -74,7 +74,7 @@ export default function Navigation() {
           <BottomNavLink href="/planning" isActive={isActive('/planning')} iconName="calendar">
             Planning
           </BottomNavLink>
-          <BottomNavLink href="/availability" isActive={isActive('/availability')} iconName="availability">
+          <BottomNavLink href="/beschikbaarheid" isActive={isActive('/beschikbaarheid')} iconName="availability">
             Beschikbaarheid
           </BottomNavLink>
         </div>

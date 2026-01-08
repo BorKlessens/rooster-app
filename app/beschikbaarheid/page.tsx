@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { supabase, getCurrentUserId } from '@/lib/supabaseClient'
 
 /**
  * Beschikbaarheid pagina
@@ -15,10 +16,10 @@ import { useRouter } from 'next/navigation';
  * - Meerdere tijdstippen kunnen geselecteerd worden
  * - Tijdstippen verschijnen achter een plusje
  * 
- * TODO: Later koppelen aan Supabase
+ * Beschikbaarheid wordt opgeslagen in Supabase database
  * - Opslaan van beschikbaarheid per gebruiker, datum en tijdstippen
  * - Ophalen van bestaande beschikbaarheid bij laden
- * - Real-time updates mogelijk maken
+ * - Admin kan beschikbaarheid bekijken via admin pagina
  */
 
 // Type definitie voor beschikbaarheid status
@@ -60,15 +61,19 @@ export default function AvailabilityPage() {
     }
     
     // Initialiseer dagen voor huidige week
-    initializeWeek();
-    setIsLoading(false);
+    initializeWeek().then(() => {
+      setIsLoading(false);
+    });
   }, [router, currentWeekStart]);
 
   /**
    * Initialiseer de dagen voor de huidige week
-   * TODO: Later ophalen uit Supabase
+   * Haalt beschikbaarheid op uit Supabase database
    */
-  const initializeWeek = () => {
+  const initializeWeek = async () => {
+    const userId = getCurrentUserId();
+    if (!userId) return;
+
     const weekDays: DayAvailability[] = [];
     const start = new Date(currentWeekStart);
     
@@ -78,18 +83,38 @@ export default function AvailabilityPage() {
     start.setDate(diff);
     start.setHours(0, 0, 0, 0);
     
+    // Bereken week eind
+    const weekEnd = new Date(start);
+    weekEnd.setDate(start.getDate() + 6);
+
+    // Haal beschikbaarheid op uit database
+    const { data: availabilityData, error } = await supabase
+      .from('availability')
+      .select('*')
+      .eq('user_id', userId)
+      .gte('date', start.toISOString().split('T')[0])
+      .lte('date', weekEnd.toISOString().split('T')[0]);
+
+    if (error) {
+      console.error('Error loading availability:', error);
+    }
+
     // Genereer 7 dagen (maandag t/m zondag)
     for (let i = 0; i < 7; i++) {
       const date = new Date(start);
       date.setDate(start.getDate() + i);
+      const dateString = date.toISOString().split('T')[0];
       
-      // TODO: Later ophalen uit Supabase
-      // Voor nu: mock data - standaard null (niet ingesteld)
+      // Zoek bijbehorende beschikbaarheid
+      const dayAvailability = availabilityData?.find(
+        (a: { date: string }) => a.date === dateString
+      );
+
       weekDays.push({
         date,
-        status: null,
-        timeSlots: [],
-        locked: false,
+        status: dayAvailability?.status || null,
+        timeSlots: (dayAvailability?.time_slots as TimeSlot[]) || [],
+        locked: dayAvailability?.locked || false,
       });
     }
     
@@ -121,10 +146,13 @@ export default function AvailabilityPage() {
    * - Dag wordt automatisch 'available' als er tijdstippen zijn
    * - Dag wordt automatisch 'null' als er geen tijdstippen meer zijn
    * - Kan niet wijzigen als dag gelocked is
-   * 
-   * TODO: Later opslaan in Supabase
+   * - Slaat wijzigingen op in Supabase database
    */
-  const toggleTimeSlot = (date: Date, timeSlot: TimeSlot) => {
+  const toggleTimeSlot = async (date: Date, timeSlot: TimeSlot) => {
+    const userId = getCurrentUserId();
+    const username = localStorage.getItem('username');
+    if (!userId || !username) return;
+
     setDays(prevDays => 
       prevDays.map(day => {
         if (day.date.toDateString() === date.toDateString()) {
@@ -145,13 +173,25 @@ export default function AvailabilityPage() {
             setExpandedDay(null);
           }
           
-          // TODO: Hier zou je een Supabase update kunnen doen
-          // await supabase.from('availability').upsert({
-          //   user_id: userId,
-          //   date: date.toISOString().split('T')[0],
-          //   status: newStatus,
-          //   time_slots: newTimeSlots
-          // });
+          // Opslaan in database
+          supabase
+            .from('availability')
+            .upsert({
+              user_id: userId,
+              username: username,
+              date: date.toISOString().split('T')[0],
+              status: newStatus,
+              time_slots: newTimeSlots,
+              locked: day.locked,
+            }, {
+              onConflict: 'user_id,date'
+            })
+            .then(({ error }) => {
+              if (error) {
+                console.error('Error saving availability:', error);
+                // Optioneel: toon error message aan gebruiker
+              }
+            });
           
           return { ...day, status: newStatus, timeSlots: newTimeSlots };
         }
@@ -166,13 +206,15 @@ export default function AvailabilityPage() {
    * Logica:
    * - Alleen locken als er tijdstippen zijn geselecteerd
    * - Bij unlocken kunnen tijdstippen weer gewijzigd worden
+   * - Slaat lock status op in Supabase database
    * 
    * @param keepExpanded - Als true, blijft de dag uitgeklapt na unlocken (bijv. bij bewerken)
-   * 
-   * TODO: Later opslaan in Supabase
    */
-  const toggleLock = (date: Date, e: React.MouseEvent, keepExpanded: boolean = false) => {
+  const toggleLock = async (date: Date, e: React.MouseEvent, keepExpanded: boolean = false) => {
     e.stopPropagation();
+    const userId = getCurrentUserId();
+    const username = localStorage.getItem('username');
+    if (!userId || !username) return;
     
     setDays(prevDays => 
       prevDays.map(day => {
@@ -189,12 +231,24 @@ export default function AvailabilityPage() {
             setExpandedDay(null);
           }
           
-          // TODO: Hier zou je een Supabase update kunnen doen
-          // await supabase.from('availability').upsert({
-          //   user_id: userId,
-          //   date: date.toISOString().split('T')[0],
-          //   locked: newLocked
-          // });
+          // Opslaan in database
+          supabase
+            .from('availability')
+            .upsert({
+              user_id: userId,
+              username: username,
+              date: date.toISOString().split('T')[0],
+              status: day.status,
+              time_slots: day.timeSlots,
+              locked: newLocked,
+            }, {
+              onConflict: 'user_id,date'
+            })
+            .then(({ error }) => {
+              if (error) {
+                console.error('Error saving lock status:', error);
+              }
+            });
           
           return { ...day, locked: newLocked };
         }
@@ -266,7 +320,6 @@ export default function AvailabilityPage() {
     }
     return 'Niet ingesteld';
   };
-
 
   /**
    * Get label voor tijdstip
@@ -614,6 +667,7 @@ export default function AvailabilityPage() {
  *      * date (date)
  *      * status (text: 'available' | null)
  *      * time_slots (text[] of jsonb: ['morning', 'afternoon', 'evening'])
+ *      * locked (boolean)
  *      * created_at (timestamp)
  *      * updated_at (timestamp)
  * 
@@ -635,7 +689,8 @@ export default function AvailabilityPage() {
  *        user_id: userId,
  *        date: date.toISOString().split('T')[0],
  *        status: newStatus,
- *        time_slots: newTimeSlots
+ *        time_slots: newTimeSlots,
+ *        locked: newLocked
  *      }, {
  *        onConflict: 'user_id,date'
  *      });

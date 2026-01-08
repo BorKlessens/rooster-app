@@ -16,19 +16,31 @@ export default function DashboardPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [userName, setUserName] = useState<string>('');
+  const [username, setUsername] = useState<string>('');
+  const [fullName, setFullName] = useState<string>('');
 
   useEffect(() => {
     // Check of gebruiker ingelogd is
     const loggedIn = localStorage.getItem('isLoggedIn') === 'true';
-    const email = localStorage.getItem('userEmail');
+    const user = localStorage.getItem('username');
     setIsLoggedIn(loggedIn);
-    setUserEmail(email);
     
-    if (email) {
-      // Haal naam op uit email (alles voor @)
-      setUserName(email.split('@')[0]);
+    if (user) {
+      setUsername(user);
+      
+      // Haal volledige naam op uit opgeslagen gebruikers
+      const storedUsers = localStorage.getItem('users');
+      if (storedUsers) {
+        const users = JSON.parse(storedUsers);
+        const userData = users.find((u: { username: string }) => u.username === user);
+        if (userData && userData.fullName) {
+          setFullName(userData.fullName);
+        } else {
+          setFullName(user);
+        }
+      } else {
+        setFullName(user);
+      }
     }
     
     setIsLoading(false);
@@ -98,11 +110,11 @@ export default function DashboardPage() {
           <div className="flex items-center gap-3">
             {/* Profielfoto placeholder */}
             <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white font-semibold text-lg shadow-md">
-              {userName.charAt(0).toUpperCase()}
+              {(fullName || username).charAt(0).toUpperCase()}
             </div>
             <div>
               <p className="text-sm text-blue-500">{getGreeting()}</p>
-              <p className="text-lg font-bold text-blue-900">{userName}</p>
+              <p className="text-lg font-bold text-blue-900">{fullName || username}</p>
             </div>
           </div>
           {/* Notificatie icoon */}
@@ -207,7 +219,7 @@ export default function DashboardPage() {
 
         {/* Snelle actie button */}
         <button
-          onClick={() => router.push('/availability')}
+          onClick={() => router.push('/beschikbaarheid')}
           className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 active:from-blue-800 active:to-blue-900 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl"
         >
           Beschikbaarheid doorgeven

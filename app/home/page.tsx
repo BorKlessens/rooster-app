@@ -18,14 +18,14 @@ export default function HomePage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [username, setUsername] = useState<string | null>(null);
 
   useEffect(() => {
     // Check of gebruiker ingelogd is (alleen op client)
     const loggedIn = localStorage.getItem('isLoggedIn') === 'true';
-    const email = localStorage.getItem('userEmail');
+    const user = localStorage.getItem('username');
     setIsLoggedIn(loggedIn);
-    setUserEmail(email);
+    setUsername(user);
     setIsLoading(false);
     
     if (!loggedIn) {
@@ -72,7 +72,7 @@ export default function HomePage() {
         </div>
 
         <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2 text-center">
-          {userEmail ? `Welkom ${userEmail.split('@')[0]}!` : 'Welkom terug!'}
+          {username ? `Welkom ${username}!` : 'Welkom terug!'}
         </h2>
         <p className="text-sm sm:text-base text-gray-600 mb-8 text-center">
           Welkom terug! Hier zie je een overzicht van je rooster en beschikbaarheid.
@@ -114,7 +114,7 @@ export default function HomePage() {
 
           {/* Beschikbaarheid button */}
           <button
-            onClick={() => router.push('/availability')}
+            onClick={() => router.push('/beschikbaarheid')}
             className="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] flex items-center justify-between group"
           >
             <div className="flex items-center gap-3">

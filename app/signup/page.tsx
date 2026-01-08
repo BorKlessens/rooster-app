@@ -12,7 +12,8 @@ import { useEffect } from 'react';
  */
 export default function SignUpPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
+  const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
@@ -38,13 +39,27 @@ export default function SignUpPage() {
     setError('');
 
     // Validatie
+    if (!username.trim()) {
+      setError('Gebruikersnaam is verplicht.');
+      setIsLoading(false);
+      return;
+    }
+
+    if (username.length < 3) {
+      setError('Gebruikersnaam moet minimaal 3 tekens lang zijn.');
+      setIsLoading(false);
+      return;
+    }
+
     if (password !== confirmPassword) {
       setError('Wachtwoorden komen niet overeen.');
+      setIsLoading(false);
       return;
     }
 
     if (password.length < 6) {
       setError('Wachtwoord moet minimaal 6 tekens lang zijn.');
+      setIsLoading(false);
       return;
     }
 
@@ -52,14 +67,43 @@ export default function SignUpPage() {
 
     // Simpele demo signup (later vervangen door Supabase Auth)
     try {
+      // Haal opgeslagen gebruikers op
+      const storedUsers = localStorage.getItem('users');
+      const users = storedUsers ? JSON.parse(storedUsers) : [];
+      
+      // Check of gebruikersnaam al bestaat
+      const usernameExists = users.some(
+        (u: { username: string }) => u.username.toLowerCase() === username.toLowerCase()
+      );
+      
+      if (usernameExists) {
+        setError('Deze gebruikersnaam is al in gebruik.');
+        setIsLoading(false);
+        return;
+      }
+      
+      // Maak nieuwe gebruiker
+      const newUser = {
+        id: `user_${Date.now()}`,
+        username: username.trim(),
+        fullName: fullName.trim() || username.trim(),
+        password: password, // In productie: hash dit wachtwoord!
+        createdAt: new Date().toISOString(),
+      };
+      
+      // Voeg gebruiker toe
+      users.push(newUser);
+      localStorage.setItem('users', JSON.stringify(users));
+      
       // Simuleer API call
       await new Promise(resolve => setTimeout(resolve, 500));
       
       // Sla login state op in localStorage
       localStorage.setItem('isLoggedIn', 'true');
-      localStorage.setItem('userEmail', email);
+      localStorage.setItem('username', newUser.username);
+      localStorage.setItem('userId', newUser.id);
       
-      // Redirect naar dashboard
+      // Redirect naar home
       router.push('/home');
     } catch (err) {
       setError('Er is iets misgegaan. Probeer het opnieuw.');
@@ -90,22 +134,44 @@ export default function SignUpPage() {
           <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
             <div className="animate-slide-in-left" style={{ animationDelay: '0.1s' }}>
               <label 
-                htmlFor="email" 
+                htmlFor="username" 
                 className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2 transition-colors duration-200"
                 style={{ fontFamily: 'var(--font-geist-sans)' }}
               >
-                Email
+                Gebruikersnaam *
               </label>
               <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="username email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                id="username"
+                name="username"
+                type="text"
+                autoComplete="username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 required
+                minLength={3}
                 className="w-full px-3 sm:px-4 py-2.5 sm:py-3.5 text-sm sm:text-base bg-white border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all duration-300 shadow-sm hover:shadow-md hover:border-gray-400 hover:scale-[1.02] active:scale-[0.98]"
-                placeholder="jouw@email.nl"
+                placeholder="jouw gebruikersnaam"
+                style={{ fontFamily: 'var(--font-geist-sans)' }}
+              />
+            </div>
+
+            <div className="animate-slide-in-left" style={{ animationDelay: '0.15s' }}>
+              <label 
+                htmlFor="fullName" 
+                className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2 transition-colors duration-200"
+                style={{ fontFamily: 'var(--font-geist-sans)' }}
+              >
+                Volledige naam (optioneel)
+              </label>
+              <input
+                id="fullName"
+                name="fullName"
+                type="text"
+                autoComplete="name"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                className="w-full px-3 sm:px-4 py-2.5 sm:py-3.5 text-sm sm:text-base bg-white border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all duration-300 shadow-sm hover:shadow-md hover:border-gray-400 hover:scale-[1.02] active:scale-[0.98]"
+                placeholder="Jan Jansen"
                 style={{ fontFamily: 'var(--font-geist-sans)' }}
               />
             </div>

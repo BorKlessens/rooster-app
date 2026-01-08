@@ -59,9 +59,15 @@ export default function AdminPage() {
             <h2 className="text-xl font-semibold text-gray-900 mb-4">
               Beschikbaarheid
             </h2>
-            <p className="text-gray-500 text-sm">
+            <p className="text-gray-500 text-sm mb-4">
               Overzicht van beschikbaarheid van alle medewerkers
             </p>
+            <a
+              href="/admin/beschikbaarheid"
+              className="inline-block bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-sm font-medium"
+            >
+              Bekijk beschikbaarheid
+            </a>
           </div>
           
           {/* Rooster beheer card */}

@@ -4,6 +4,7 @@ import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useEffect } from 'react';
+import { createAdminAccountIfNeeded } from '@/lib/createAdminAccount';
 
 /**
  * Login pagina
@@ -13,7 +14,7 @@ import { useEffect } from 'react';
  */
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -24,6 +25,9 @@ export default function LoginPage() {
     document.documentElement.style.overflow = 'hidden';
     document.body.style.background = 'transparent';
     document.documentElement.style.background = 'transparent';
+    
+    // Zorg ervoor dat admin account bestaat (direct bij mount)
+    createAdminAccountIfNeeded();
     
     return () => {
       document.body.style.overflow = 'unset';
@@ -40,11 +44,51 @@ export default function LoginPage() {
 
     // Simpele demo login (later vervangen door Supabase Auth)
     try {
+      // Zorg ervoor dat admin account bestaat voordat we proberen in te loggen
+      createAdminAccountIfNeeded();
+      
       await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Haal opgeslagen gebruikers op
+      const storedUsers = localStorage.getItem('users');
+      const users = storedUsers ? JSON.parse(storedUsers) : [];
+      
+      // Trim username input en zoek gebruiker (case-insensitive)
+      const trimmedUsername = username.trim();
+      
+      // Debug: log alle gebruikers (alleen in development)
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Zoeken naar gebruiker:', trimmedUsername);
+        console.log('Beschikbare gebruikers:', users.map((u: { username: string }) => u.username));
+      }
+      
+      const user = users.find(
+        (u: { username: string; password: string }) => 
+          u.username.toLowerCase().trim() === trimmedUsername.toLowerCase() && u.password === password
+      );
+      
+      if (!user) {
+        // Check of username bestaat maar wachtwoord verkeerd is
+        const userExists = users.find(
+          (u: { username: string }) => u.username.toLowerCase().trim() === trimmedUsername.toLowerCase()
+        );
+        
+        if (userExists) {
+          setError('Wachtwoord is onjuist.');
+        } else {
+          setError('Gebruikersnaam of wachtwoord is onjuist.');
+        }
+        setIsLoading(false);
+        return;
+      }
+      
+      // Login succesvol
       localStorage.setItem('isLoggedIn', 'true');
-      localStorage.setItem('userEmail', email);
+      localStorage.setItem('username', user.username);
+      localStorage.setItem('userId', user.id || user.username);
       router.push('/home');
     } catch (err) {
+      console.error('Login error:', err);
       setError('Er is iets misgegaan. Probeer het opnieuw.');
       setIsLoading(false);
     }
@@ -73,22 +117,22 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
             <div className="animate-slide-in-left" style={{ animationDelay: '0.1s' }}>
               <label 
-                htmlFor="email" 
+                htmlFor="username" 
                 className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2 transition-colors duration-200"
                 style={{ fontFamily: 'var(--font-geist-sans)' }}
               >
-                Email
+                Gebruikersnaam
               </label>
               <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="username email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                id="username"
+                name="username"
+                type="text"
+                autoComplete="username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 required
                 className="w-full px-3 sm:px-4 py-2.5 sm:py-3.5 text-sm sm:text-base bg-white border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all duration-300 shadow-sm hover:shadow-md hover:border-gray-400 hover:scale-[1.02] active:scale-[0.98]"
-                placeholder="jouw@email.nl"
+                placeholder="jouw gebruikersnaam"
                 style={{ fontFamily: 'var(--font-geist-sans)' }}
               />
             </div>
