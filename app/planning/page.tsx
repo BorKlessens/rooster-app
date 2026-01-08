@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { isAdmin, supabase, getCurrentUserId } from '@/lib/supabaseClient';
 
 /**
  * Planning / Rooster pagina
@@ -24,6 +25,8 @@ import { useRouter } from 'next/navigation';
 // Type definitie voor een dienst/shift
 interface Shift {
   id: string;
+  user_id: string;
+  username: string;
   startTime: string; // Format: "HH:MM"
   endTime: string; // Format: "HH:MM"
   role?: string; // Bijv. "Bediening", "Keuken", etc.
@@ -40,6 +43,10 @@ interface DayWithShifts {
 const generateMockShifts = (): Map<string, Shift[]> => {
   const shifts = new Map<string, Shift[]>();
   const today = new Date();
+  const userId = getCurrentUserId();
+  
+  // Mock gebruikersnamen
+  const mockUsers = ['Jan Jansen', 'Piet Pietersen', 'Marie de Vries', 'Klaas Klaassen'];
   
   // Voeg enkele mock diensten toe voor de komende weken
   for (let i = 0; i < 30; i++) {
@@ -57,9 +64,13 @@ const generateMockShifts = (): Map<string, Shift[]> => {
         const startHour = Math.floor(Math.random() * 8) + 9; // Tussen 09:00 en 16:00
         const duration = Math.floor(Math.random() * 4) + 4; // 4-8 uur
         const endHour = startHour + duration;
+        const mockUser = mockUsers[Math.floor(Math.random() * mockUsers.length)];
+        const mockUserId = `user_${mockUser.toLowerCase().replace(' ', '_')}`;
         
         dayShifts.push({
           id: `shift-${date.toISOString()}-${j}`,
+          user_id: mockUserId,
+          username: mockUser,
           startTime: `${startHour.toString().padStart(2, '0')}:00`,
           endTime: `${endHour.toString().padStart(2, '0')}:00`,
           role: ['Bediening', 'Keuken', 'Bar'][Math.floor(Math.random() * 3)],
@@ -90,27 +101,101 @@ export default function PlanningPage() {
 
   useEffect(() => {
     // Check of gebruiker ingelogd is
-    const loggedIn = localStorage.getItem('isLoggedIn') === 'true';
-    setIsLoggedIn(loggedIn);
+    const checkAuth = async () => {
+      const loggedIn = localStorage.getItem('isLoggedIn') === 'true';
+      setIsLoggedIn(loggedIn);
+      
+      if (!loggedIn) {
+        router.push('/login');
+        return;
+      }
+      
+      // Check of gebruiker admin is
+      const admin = await isAdmin();
+      if (admin) {
+        router.push('/admin');
+        return;
+      }
+      
+      // Laad diensten uit Supabase
+      await loadShifts();
+      setIsLoading(false);
+    };
     
-    if (!loggedIn) {
-      router.push('/login');
+    checkAuth();
+  }, [router]);
+
+  useEffect(() => {
+    // Laad diensten opnieuw wanneer maand verandert
+    if (isLoggedIn && !isLoading) {
+      loadShifts();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentMonth]);
+
+  /**
+   * Laad alle diensten uit Supabase (niet alleen van ingelogde gebruiker)
+   */
+  const loadShifts = async () => {
+    const userId = getCurrentUserId();
+    if (!userId) {
+      // Fallback naar mock data als geen userId
+      const mockShifts = generateMockShifts();
+      setShiftsData(mockShifts);
       return;
     }
-    
-    // Laad mock data
-    // TODO: Later vervangen door Supabase query
-    // const { data, error } = await supabase
-    //   .from('shifts')
-    //   .select('*')
-    //   .eq('user_id', userId)
-    //   .gte('date', monthStart)
-    //   .lte('date', monthEnd);
-    
-    const mockShifts = generateMockShifts();
-    setShiftsData(mockShifts);
-    setIsLoading(false);
-  }, [router, currentMonth]);
+
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+    const monthStart = new Date(year, month, 1);
+    const monthEnd = new Date(year, month + 1, 0);
+
+    try {
+      // Haal ALLE shifts op (niet alleen van ingelogde gebruiker)
+      const { data, error } = await supabase
+        .from('shifts')
+        .select('*')
+        .gte('date', monthStart.toISOString().split('T')[0])
+        .lte('date', monthEnd.toISOString().split('T')[0])
+        .order('date', { ascending: true })
+        .order('start_time', { ascending: true });
+
+      if (error) {
+        console.error('Error loading shifts:', error);
+        // Fallback naar mock data bij error
+        const mockShifts = generateMockShifts();
+        setShiftsData(mockShifts);
+        return;
+      }
+
+      // Transform data naar Map
+      const shiftsMap = new Map<string, Shift[]>();
+      if (data && data.length > 0) {
+        data.forEach((shift: any) => {
+          const dateString = shift.date;
+          if (!shiftsMap.has(dateString)) {
+            shiftsMap.set(dateString, []);
+          }
+          shiftsMap.get(dateString)!.push({
+            id: shift.id,
+            user_id: shift.user_id,
+            username: shift.username,
+            startTime: shift.start_time,
+            endTime: shift.end_time,
+            role: shift.role || undefined,
+            description: shift.description || undefined,
+          });
+        });
+      }
+
+      setShiftsData(shiftsMap);
+    } catch (error) {
+      console.error('Error:', error);
+      // Fallback naar mock data bij error
+      const mockShifts = generateMockShifts();
+      setShiftsData(mockShifts);
+    }
+  };
 
   /**
    * Genereer alle dagen voor de huidige maand
@@ -178,6 +263,14 @@ export default function PlanningPage() {
   };
 
   /**
+   * Check of een dienst van de ingelogde gebruiker is
+   */
+  const isMyShift = (shift: Shift): boolean => {
+    const userId = getCurrentUserId();
+    return shift.user_id === userId;
+  };
+
+  /**
    * Formatteer datum voor weergave
    */
   const formatDate = (date: Date): string => {
@@ -230,10 +323,10 @@ export default function PlanningPage() {
   // Loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-blue-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Bezig met laden...</p>
+          <p className="mt-4 text-blue-700">Bezig met laden...</p>
         </div>
       </div>
     );
@@ -242,10 +335,10 @@ export default function PlanningPage() {
   // Als niet ingelogd, toon loading (redirect wordt afgehandeld in useEffect)
   if (!isLoggedIn) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-blue-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Bezig met laden...</p>
+          <p className="mt-4 text-blue-700">Bezig met laden...</p>
         </div>
       </div>
     );
@@ -253,16 +346,25 @@ export default function PlanningPage() {
 
   // DAGDETAIL VIEW
   if (selectedDay) {
-    const shifts = getShiftsForDate(selectedDay);
+    const allShifts = getShiftsForDate(selectedDay);
+    const userId = getCurrentUserId();
+    
+    // Sorteer shifts op starttijd en dan op gebruikersnaam
+    const sortedShifts = [...allShifts].sort((a, b) => {
+      if (a.startTime !== b.startTime) {
+        return a.startTime.localeCompare(b.startTime);
+      }
+      return a.username.localeCompare(b.username);
+    });
     
     return (
-      <div className="min-h-screen bg-gray-50 pb-24">
+      <div className="min-h-screen bg-blue-50 pb-24">
         <div className="max-w-2xl mx-auto px-4 py-6 sm:py-8">
           {/* Header met terug knop */}
           <div className="mb-6">
             <button
               onClick={() => setSelectedDay(null)}
-              className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors"
+              className="flex items-center gap-2 text-blue-600 hover:text-blue-800 mb-4 transition-colors"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
@@ -270,57 +372,93 @@ export default function PlanningPage() {
               <span className="text-sm font-medium">Terug naar maandoverzicht</span>
             </button>
             
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
+            <h1 className="text-2xl sm:text-3xl font-bold text-blue-900 mb-2">
               {formatDate(selectedDay)}
             </h1>
+            <p className="text-sm text-blue-600">
+              {sortedShifts.length > 0 
+                ? `${sortedShifts.length} ${sortedShifts.length === 1 ? 'medewerker' : 'medewerkers'} ingepland`
+                : 'Geen medewerkers ingepland'}
+            </p>
           </div>
 
-          {/* Diensten lijst */}
-          {shifts.length > 0 ? (
+          {/* Diensten lijst - alle werknemers */}
+          {sortedShifts.length > 0 ? (
             <div className="space-y-3">
-              {shifts.map((shift) => (
-                <div
-                  key={shift.id}
-                  className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      {/* Tijden */}
-                      <div className="flex items-center gap-3 mb-2">
-                        <div className="text-lg sm:text-xl font-bold text-gray-900">
-                          {formatTime(shift.startTime)}
+              {sortedShifts.map((shift) => {
+                const isMyShiftValue = isMyShift(shift);
+                return (
+                  <div
+                    key={shift.id}
+                    className={`rounded-xl shadow-sm border-2 p-4 sm:p-5 transition-colors ${
+                      isMyShiftValue
+                        ? 'bg-green-50 border-green-400 hover:border-green-500'
+                        : 'bg-white border-blue-200 hover:border-blue-300'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        {/* Werknemer naam */}
+                        <div className="flex items-center gap-2 mb-2">
+                          <h3 className={`text-base sm:text-lg font-bold ${
+                            isMyShiftValue ? 'text-green-900' : 'text-blue-900'
+                          }`}>
+                            {shift.username}
+                          </h3>
+                          {isMyShiftValue && (
+                            <span className="px-2 py-0.5 bg-green-600 text-white text-xs font-medium rounded">
+                              Jij
+                            </span>
+                          )}
                         </div>
-                        <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-                        </svg>
-                        <div className="text-lg sm:text-xl font-bold text-gray-900">
-                          {formatTime(shift.endTime)}
+                        
+                        {/* Tijden */}
+                        <div className="flex items-center gap-3 mb-2">
+                          <div className={`text-lg sm:text-xl font-bold ${
+                            isMyShiftValue ? 'text-green-800' : 'text-blue-900'
+                          }`}>
+                            {formatTime(shift.startTime)}
+                          </div>
+                          <svg className={`w-4 h-4 ${
+                            isMyShiftValue ? 'text-green-500' : 'text-blue-400'
+                          }`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                          </svg>
+                          <div className={`text-lg sm:text-xl font-bold ${
+                            isMyShiftValue ? 'text-green-800' : 'text-blue-900'
+                          }`}>
+                            {formatTime(shift.endTime)}
+                          </div>
                         </div>
+                        
+                        {/* Rol */}
+                        {shift.role && (
+                          <div className={`text-sm font-medium mb-1 ${
+                            isMyShiftValue ? 'text-green-700' : 'text-blue-600'
+                          }`}>
+                            {shift.role}
+                          </div>
+                        )}
+                        
+                        {/* Beschrijving */}
+                        {shift.description && (
+                          <div className={`text-sm ${
+                            isMyShiftValue ? 'text-green-700' : 'text-blue-700'
+                          }`}>
+                            {shift.description}
+                          </div>
+                        )}
                       </div>
-                      
-                      {/* Rol */}
-                      {shift.role && (
-                        <div className="text-sm font-medium text-blue-600 mb-1">
-                          {shift.role}
-                        </div>
-                      )}
-                      
-                      {/* Beschrijving */}
-                      {shift.description && (
-                        <div className="text-sm text-gray-600">
-                          {shift.description}
-                        </div>
-                      )}
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             /* Lege staat */
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 sm:p-12 text-center">
+            <div className="bg-white rounded-xl shadow-sm border-2 border-blue-200 p-8 sm:p-12 text-center">
               <svg
-                className="w-16 h-16 text-gray-300 mx-auto mb-4"
+                className="w-16 h-16 text-blue-300 mx-auto mb-4"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -332,11 +470,11 @@ export default function PlanningPage() {
                   d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5"
                 />
               </svg>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              <h3 className="text-lg font-semibold text-blue-900 mb-2">
                 Geen diensten
               </h3>
-              <p className="text-sm text-gray-500">
-                Je hebt op deze dag geen diensten ingepland.
+              <p className="text-sm text-blue-600">
+                Er zijn op deze dag geen medewerkers ingepland.
               </p>
             </div>
           )}
@@ -350,27 +488,27 @@ export default function PlanningPage() {
   const monthName = currentMonth.toLocaleDateString('nl-NL', { month: 'long', year: 'numeric' });
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-24">
+    <div className="min-h-screen bg-blue-50 pb-24">
       <div className="max-w-4xl mx-auto px-4 py-6 sm:py-8">
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
+          <h1 className="text-2xl sm:text-3xl font-bold text-blue-900 mb-2">
             Rooster
           </h1>
-          <p className="text-sm sm:text-base text-gray-600">
+          <p className="text-sm sm:text-base text-blue-700">
             Bekijk je ingeplande diensten
           </p>
         </div>
 
         {/* Maand navigatie */}
-        <div className="mb-6 bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+        <div className="mb-6 bg-white rounded-xl shadow-sm border-2 border-blue-200 p-4">
           <div className="flex items-center justify-between">
             <button
               onClick={goToPreviousMonth}
-              className="p-2 rounded-lg hover:bg-gray-100 active:bg-gray-200 transition-colors"
+              className="p-2 rounded-lg hover:bg-blue-50 active:bg-blue-100 transition-colors"
               aria-label="Vorige maand"
             >
-              <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
               </svg>
             </button>
@@ -378,7 +516,7 @@ export default function PlanningPage() {
             <div className="flex-1 text-center">
               <button
                 onClick={goToCurrentMonth}
-                className="text-base sm:text-lg font-semibold text-gray-900 hover:text-blue-600 transition-colors capitalize"
+                className="text-base sm:text-lg font-semibold text-blue-900 hover:text-blue-700 transition-colors capitalize"
               >
                 {monthName}
               </button>
@@ -386,10 +524,10 @@ export default function PlanningPage() {
             
             <button
               onClick={goToNextMonth}
-              className="p-2 rounded-lg hover:bg-gray-100 active:bg-gray-200 transition-colors"
+              className="p-2 rounded-lg hover:bg-blue-50 active:bg-blue-100 transition-colors"
               aria-label="Volgende maand"
             >
-              <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
               </svg>
             </button>
@@ -397,13 +535,13 @@ export default function PlanningPage() {
         </div>
 
         {/* Kalender grid */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="bg-white rounded-xl shadow-sm border-2 border-blue-200 overflow-hidden">
           {/* Weekdag headers */}
-          <div className="grid grid-cols-7 border-b border-gray-200">
+          <div className="grid grid-cols-7 border-b-2 border-blue-200">
             {weekDays.map((day, index) => (
               <div
                 key={index}
-                className="p-2 sm:p-3 text-center text-xs sm:text-sm font-semibold text-gray-600 bg-gray-50"
+                className="p-2 sm:p-3 text-center text-xs sm:text-sm font-semibold text-blue-700 bg-blue-50"
               >
                 {day}
               </div>
@@ -417,18 +555,25 @@ export default function PlanningPage() {
               const hasShifts = dayShifts.length > 0;
               const isTodayDate = isToday(day);
               const isCurrentMonthDate = isCurrentMonth(day);
+              const userId = getCurrentUserId();
+              
+              // Tel eigen shifts en andere shifts
+              const myShifts = dayShifts.filter(s => s.user_id === userId);
+              const otherShifts = dayShifts.filter(s => s.user_id !== userId);
+              const hasMyShifts = myShifts.length > 0;
+              const hasOtherShifts = otherShifts.length > 0;
 
               return (
                 <button
                   key={index}
                   onClick={() => setSelectedDay(day)}
                   className={`
-                    aspect-square p-1 sm:p-2 border-r border-b border-gray-200
+                    aspect-square p-1 sm:p-2 border-r border-b border-blue-100
                     transition-all duration-200 active:scale-95
-                    ${isCurrentMonthDate ? 'bg-white' : 'bg-gray-50'}
+                    ${isCurrentMonthDate ? 'bg-white' : 'bg-blue-50'}
                     ${isTodayDate 
-                      ? 'ring-2 ring-blue-500 ring-inset' 
-                      : 'hover:bg-gray-50'
+                      ? 'ring-2 ring-blue-500 ring-inset bg-blue-50' 
+                      : 'hover:bg-blue-50'
                     }
                     ${hasShifts ? 'cursor-pointer' : ''}
                   `}
@@ -440,9 +585,9 @@ export default function PlanningPage() {
                         text-xs sm:text-sm font-medium mb-1
                         ${isCurrentMonthDate 
                           ? isTodayDate 
-                            ? 'text-blue-600 font-bold' 
-                            : 'text-gray-900'
-                          : 'text-gray-400'
+                            ? 'text-blue-700 font-bold' 
+                            : 'text-blue-900'
+                          : 'text-blue-400'
                         }
                       `}
                     >
@@ -451,22 +596,40 @@ export default function PlanningPage() {
 
                     {/* Diensten indicator */}
                     {hasShifts && (
-                      <div className="flex gap-0.5 sm:gap-1 justify-center">
-                        {dayShifts.slice(0, 3).map((_, shiftIndex) => (
+                      <div className="flex gap-0.5 sm:gap-1 justify-center flex-wrap">
+                        {/* Eigen shifts (groen) */}
+                        {hasMyShifts && (
                           <div
-                            key={shiftIndex}
                             className={`
                               w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full
-                              ${isTodayDate 
-                                ? 'bg-blue-600' 
-                                : 'bg-blue-500'
-                              }
+                              ${isTodayDate ? 'bg-green-600' : 'bg-green-500'}
                             `}
+                            title="Jouw dienst"
                           />
-                        ))}
-                        {dayShifts.length > 3 && (
-                          <div className="text-[8px] sm:text-[10px] text-gray-500 font-medium">
-                            +{dayShifts.length - 3}
+                        )}
+                        {/* Andere shifts (blauw) */}
+                        {hasOtherShifts && (
+                          <>
+                            {otherShifts.slice(0, hasMyShifts ? 2 : 3).map((_, shiftIndex) => (
+                              <div
+                                key={`other-${shiftIndex}`}
+                                className={`
+                                  w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full
+                                  ${isTodayDate ? 'bg-blue-600' : 'bg-blue-500'}
+                                `}
+                              />
+                            ))}
+                            {otherShifts.length > (hasMyShifts ? 2 : 3) && (
+                              <div className="text-[8px] sm:text-[10px] text-blue-600 font-medium">
+                                +{otherShifts.length - (hasMyShifts ? 2 : 3)}
+                              </div>
+                            )}
+                          </>
+                        )}
+                        {/* Totaal aantal als er veel zijn */}
+                        {dayShifts.length > 4 && (
+                          <div className="text-[8px] sm:text-[10px] text-blue-600 font-medium">
+                            {dayShifts.length}
                           </div>
                         )}
                       </div>
@@ -479,15 +642,19 @@ export default function PlanningPage() {
         </div>
 
         {/* Legenda */}
-        <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          <div className="flex items-center gap-4 text-xs sm:text-sm">
+        <div className="mt-6 bg-white rounded-xl shadow-sm border-2 border-blue-200 p-4">
+          <div className="flex items-center gap-4 text-xs sm:text-sm flex-wrap">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-green-500"></div>
+              <span className="text-blue-700">Jouw dienst</span>
+            </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-              <span className="text-gray-600">Dag met diensten</span>
+              <span className="text-blue-700">Andere diensten</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-4 h-4 border-2 border-blue-500 rounded"></div>
-              <span className="text-gray-600">Vandaag</span>
+              <span className="text-blue-700">Vandaag</span>
             </div>
           </div>
         </div>

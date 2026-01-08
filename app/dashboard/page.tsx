@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { isAdmin } from '@/lib/supabaseClient';
 
 /**
  * Dashboard pagina
@@ -21,33 +22,45 @@ export default function DashboardPage() {
 
   useEffect(() => {
     // Check of gebruiker ingelogd is
-    const loggedIn = localStorage.getItem('isLoggedIn') === 'true';
-    const user = localStorage.getItem('username');
-    setIsLoggedIn(loggedIn);
-    
-    if (user) {
-      setUsername(user);
+    const checkAuth = async () => {
+      const loggedIn = localStorage.getItem('isLoggedIn') === 'true';
+      const user = localStorage.getItem('username');
+      setIsLoggedIn(loggedIn);
       
-      // Haal volledige naam op uit opgeslagen gebruikers
-      const storedUsers = localStorage.getItem('users');
-      if (storedUsers) {
-        const users = JSON.parse(storedUsers);
-        const userData = users.find((u: { username: string }) => u.username === user);
-        if (userData && userData.fullName) {
-          setFullName(userData.fullName);
+      if (!loggedIn) {
+        router.push('/login');
+        return;
+      }
+      
+      // Check of gebruiker admin is
+      const admin = await isAdmin();
+      if (admin) {
+        router.push('/admin');
+        return;
+      }
+      
+      if (user) {
+        setUsername(user);
+        
+        // Haal volledige naam op uit opgeslagen gebruikers
+        const storedUsers = localStorage.getItem('users');
+        if (storedUsers) {
+          const users = JSON.parse(storedUsers);
+          const userData = users.find((u: { username: string }) => u.username === user);
+          if (userData && userData.fullName) {
+            setFullName(userData.fullName);
+          } else {
+            setFullName(user);
+          }
         } else {
           setFullName(user);
         }
-      } else {
-        setFullName(user);
       }
-    }
+      
+      setIsLoading(false);
+    };
     
-    setIsLoading(false);
-    
-    if (!loggedIn) {
-      router.push('/login');
-    }
+    checkAuth();
   }, [router]);
 
   // Simuleer data (later vervangen door Supabase)

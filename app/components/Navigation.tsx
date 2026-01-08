@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { isAdmin } from '@/lib/supabaseClient';
 
 /**
  * Navigatie component voor de planning app
@@ -15,7 +17,10 @@ import { usePathname } from 'next/navigation';
  */
 export default function Navigation() {
   const pathname = usePathname();
-  const isAdminPage = pathname === '/admin';
+  const [userIsAdmin, setUserIsAdmin] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  const isAdminPage = pathname?.startsWith('/admin') || false;
   const isLoginPage = pathname === '/login';
   const isWelcomePage = pathname === '/welcome';
   const isSignUpPage = pathname === '/signup';
@@ -23,41 +28,37 @@ export default function Navigation() {
   // Bepaal of een link actief is
   const isActive = (path: string) => pathname === path;
 
+  // Check admin status
+  useEffect(() => {
+    const checkAdmin = async () => {
+      const loggedIn = localStorage.getItem('isLoggedIn') === 'true';
+      if (loggedIn) {
+        const admin = await isAdmin();
+        setUserIsAdmin(admin);
+      }
+      setIsLoading(false);
+    };
+    checkAdmin();
+  }, [pathname]);
+
   // Verberg navigatie op login, welcome en signup pagina's
   if (isLoginPage || isWelcomePage || isSignUpPage) {
     return null;
   }
 
-  // Op admin pagina: top navigatie (desktop)
+  // Als admin, toon alleen admin navigatie
+  if (userIsAdmin && !isAdminPage) {
+    return null; // Geen navigatie op gebruikerspagina's voor admins
+  }
+
+  // Verberg navigatie op admin pagina's (gebruik hamburger menu in plaats daarvan)
   if (isAdminPage) {
-    return (
-      <nav className="sticky top-0 z-50 px-4 py-3">
-        <div className="max-w-7xl mx-auto bg-white rounded-2xl shadow-lg border border-gray-200 px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <Link 
-              href="/" 
-              className="text-xl font-bold text-gray-900 hover:text-blue-600 transition-colors"
-            >
-              Rooster App
-            </Link>
-            <div className="flex space-x-2">
-              <NavLink href="/home" isActive={isActive('/home')}>
-                Home
-              </NavLink>
-              <NavLink href="/dashboard" isActive={isActive('/dashboard')}>
-                Dashboard
-              </NavLink>
-              <NavLink href="/planning" isActive={isActive('/planning')}>
-                Planning
-              </NavLink>
-              <NavLink href="/beschikbaarheid" isActive={isActive('/beschikbaarheid')}>
-                Beschikbaarheid
-              </NavLink>
-            </div>
-          </div>
-        </div>
-      </nav>
-    );
+    return null;
+  }
+
+  // Als niet-admin, verberg navigatie op admin pagina's
+  if (!userIsAdmin && isAdminPage) {
+    return null;
   }
 
   // Op alle andere pagina's: bottom navigation (mobile-first)

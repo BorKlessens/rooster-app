@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useEffect } from 'react';
 import { createAdminAccountIfNeeded } from '@/lib/createAdminAccount';
+import { isAdmin } from '@/lib/supabaseClient';
 
 /**
  * Login pagina
@@ -86,7 +87,14 @@ export default function LoginPage() {
       localStorage.setItem('isLoggedIn', 'true');
       localStorage.setItem('username', user.username);
       localStorage.setItem('userId', user.id || user.username);
-      router.push('/home');
+      
+      // Check of gebruiker admin is en redirect dienovereenkomstig
+      const admin = await isAdmin();
+      if (admin) {
+        router.push('/admin');
+      } else {
+        router.push('/home');
+      }
     } catch (err) {
       console.error('Login error:', err);
       setError('Er is iets misgegaan. Probeer het opnieuw.');

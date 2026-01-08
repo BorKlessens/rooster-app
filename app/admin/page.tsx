@@ -1,3 +1,10 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { isAdmin } from '@/lib/supabaseClient';
+import AdminNav from '@/app/components/AdminNav';
+
 /**
  * Admin pagina
  * 
@@ -10,72 +17,119 @@
  * - Alleen toegankelijk voor gebruikers met admin rol
  */
 export default function AdminPage() {
+  const router = useRouter();
+  const [isLoading, setIsLoading] = useState(true);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isAdminUser, setIsAdminUser] = useState(false);
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const loggedIn = localStorage.getItem('isLoggedIn') === 'true';
+      setIsLoggedIn(loggedIn);
+      
+      if (!loggedIn) {
+        router.push('/login');
+        return;
+      }
+      
+      // Check admin status
+      const admin = await isAdmin();
+      setIsAdminUser(admin);
+      
+      if (!admin) {
+        // Redirect naar home als geen admin
+        router.push('/home');
+        return;
+      }
+      
+      setIsLoading(false);
+    };
+    
+    checkAuth();
+  }, [router]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Bezig met laden...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAdminUser) {
+    return null;
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">
+      <AdminNav />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-20 sm:pt-8">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
           Admin Dashboard
         </h1>
-        <p className="text-gray-600 mb-8">
+        <p className="text-sm sm:text-base text-gray-600 mb-6 sm:mb-8">
           Beheer hier shifts, medewerkers en planningen.
         </p>
         
         {/* Placeholder content voor admin functionaliteit */}
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="grid gap-4 sm:gap-6 md:grid-cols-2">
           {/* Shifts beheren card */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
+            <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-3 sm:mb-4">
               Shifts beheren
             </h2>
-            <p className="text-gray-500 text-sm mb-4">
+            <p className="text-gray-500 text-xs sm:text-sm mb-4">
               Maak nieuwe shifts aan en wijzig bestaande shifts
             </p>
             <button
-              className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-sm font-medium"
+              className="w-full sm:w-auto bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-xs sm:text-sm font-medium"
               disabled
             >
               Nieuwe shift (binnenkort)
             </button>
           </div>
           
-          {/* Medewerkers overzicht card */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">
-              Medewerkers
+          {/* Inplannen card */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
+            <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-3 sm:mb-4">
+              Inplannen
             </h2>
-            <p className="text-gray-500 text-sm mb-4">
-              Bekijk beschikbaarheid en plan medewerkers in
+            <p className="text-gray-500 text-xs sm:text-sm mb-4">
+              Plan medewerkers in voor diensten
             </p>
-            <button
-              className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-sm font-medium"
-              disabled
+            <a
+              href="/admin/inplannen"
+              className="inline-block w-full sm:w-auto text-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-xs sm:text-sm font-medium"
             >
-              Bekijk medewerkers (binnenkort)
-            </button>
+              Medewerker inplannen
+            </a>
           </div>
           
           {/* Beschikbaarheid overzicht card */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
+            <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-3 sm:mb-4">
               Beschikbaarheid
             </h2>
-            <p className="text-gray-500 text-sm mb-4">
+            <p className="text-gray-500 text-xs sm:text-sm mb-4">
               Overzicht van beschikbaarheid van alle medewerkers
             </p>
             <a
               href="/admin/beschikbaarheid"
-              className="inline-block bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-sm font-medium"
+              className="inline-block w-full sm:w-auto text-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-xs sm:text-sm font-medium"
             >
               Bekijk beschikbaarheid
             </a>
           </div>
           
           {/* Rooster beheer card */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
+            <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-3 sm:mb-4">
               Rooster beheer
             </h2>
-            <p className="text-gray-500 text-sm">
+            <p className="text-gray-500 text-xs sm:text-sm">
               Bekijk en beheer het volledige rooster
             </p>
           </div>

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { isAdmin } from '@/lib/supabaseClient';
 
 /**
  * Home pagina
@@ -22,24 +23,37 @@ export default function HomePage() {
 
   useEffect(() => {
     // Check of gebruiker ingelogd is (alleen op client)
-    const loggedIn = localStorage.getItem('isLoggedIn') === 'true';
-    const user = localStorage.getItem('username');
-    setIsLoggedIn(loggedIn);
-    setUsername(user);
-    setIsLoading(false);
+    const checkAuth = async () => {
+      const loggedIn = localStorage.getItem('isLoggedIn') === 'true';
+      const user = localStorage.getItem('username');
+      setIsLoggedIn(loggedIn);
+      setUsername(user);
+      
+      if (!loggedIn) {
+        router.push('/login');
+        return;
+      }
+      
+      // Check of gebruiker admin is
+      const admin = await isAdmin();
+      if (admin) {
+        router.push('/admin');
+        return;
+      }
+      
+      setIsLoading(false);
+    };
     
-    if (!loggedIn) {
-      router.push('/login');
-    }
+    checkAuth();
   }, [router]);
 
   // Toon loading state tijdens check (zowel server als client)
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-blue-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Bezig met laden...</p>
+          <p className="mt-4 text-blue-700">Bezig met laden...</p>
         </div>
       </div>
     );
@@ -48,16 +62,16 @@ export default function HomePage() {
   // Als niet ingelogd, toon loading (redirect wordt afgehandeld in useEffect)
   if (!isLoggedIn) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-blue-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Bezig met laden...</p>
+          <p className="mt-4 text-blue-700">Bezig met laden...</p>
         </div>
       </div>
     );
   }
     return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-blue-50">
       <div className="max-w-2xl mx-auto px-4 py-6 sm:py-8">
         {/* Logo */}
         <div className="mb-2 pt-2 flex justify-center">
@@ -71,10 +85,10 @@ export default function HomePage() {
           />
         </div>
 
-        <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2 text-center">
+        <h2 className="text-2xl sm:text-3xl font-bold text-blue-900 mb-2 text-center">
           {username ? `Welkom ${username}!` : 'Welkom terug!'}
         </h2>
-        <p className="text-sm sm:text-base text-gray-600 mb-8 text-center">
+        <p className="text-sm sm:text-base text-blue-700 mb-8 text-center">
           Welkom terug! Hier zie je een overzicht van je rooster en beschikbaarheid.
         </p>
         

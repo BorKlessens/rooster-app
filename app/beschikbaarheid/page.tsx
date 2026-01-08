@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase, getCurrentUserId } from '@/lib/supabaseClient'
+import { supabase, getCurrentUserId, isAdmin } from '@/lib/supabaseClient'
 
 /**
  * Beschikbaarheid pagina
@@ -52,18 +52,29 @@ export default function AvailabilityPage() {
 
   useEffect(() => {
     // Check of gebruiker ingelogd is
-    const loggedIn = localStorage.getItem('isLoggedIn') === 'true';
-    setIsLoggedIn(loggedIn);
+    const checkAuth = async () => {
+      const loggedIn = localStorage.getItem('isLoggedIn') === 'true';
+      setIsLoggedIn(loggedIn);
+      
+      if (!loggedIn) {
+        router.push('/login');
+        return;
+      }
+      
+      // Check of gebruiker admin is
+      const admin = await isAdmin();
+      if (admin) {
+        router.push('/admin');
+        return;
+      }
+      
+      // Initialiseer dagen voor huidige week
+      initializeWeek().then(() => {
+        setIsLoading(false);
+      });
+    };
     
-    if (!loggedIn) {
-      router.push('/login');
-      return;
-    }
-    
-    // Initialiseer dagen voor huidige week
-    initializeWeek().then(() => {
-      setIsLoading(false);
-    });
+    checkAuth();
   }, [router, currentWeekStart]);
 
   /**
@@ -364,10 +375,10 @@ export default function AvailabilityPage() {
   // Loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-blue-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Bezig met laden...</p>
+          <p className="mt-4 text-blue-700">Bezig met laden...</p>
         </div>
       </div>
     );
@@ -376,37 +387,37 @@ export default function AvailabilityPage() {
   // Als niet ingelogd, toon loading (redirect wordt afgehandeld in useEffect)
   if (!isLoggedIn) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-blue-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Bezig met laden...</p>
+          <p className="mt-4 text-blue-700">Bezig met laden...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-24">
+    <div className="min-h-screen bg-blue-50 pb-24">
       <div className="max-w-2xl mx-auto px-4 py-6 sm:py-8">
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
+          <h1 className="text-2xl sm:text-3xl font-bold text-blue-900 mb-2">
             Beschikbaarheid
           </h1>
-          <p className="text-sm sm:text-base text-gray-600">
+          <p className="text-sm sm:text-base text-blue-700">
             Geef aan op welke dagen je wel of niet kunt werken
           </p>
         </div>
 
         {/* Week navigatie */}
-        <div className="mb-6 bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+        <div className="mb-6 bg-white rounded-xl shadow-sm border-2 border-blue-200 p-4">
           <div className="flex items-center justify-between">
             <button
               onClick={goToPreviousWeek}
-              className="p-2 rounded-lg hover:bg-gray-100 active:bg-gray-200 transition-colors"
+              className="p-2 rounded-lg hover:bg-blue-50 active:bg-blue-100 transition-colors"
               aria-label="Vorige week"
             >
-              <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
               </svg>
             </button>
@@ -414,7 +425,7 @@ export default function AvailabilityPage() {
             <div className="flex-1 text-center">
               <button
                 onClick={goToCurrentWeek}
-                className="text-sm sm:text-base font-semibold text-gray-900 hover:text-blue-600 transition-colors"
+                className="text-sm sm:text-base font-semibold text-blue-900 hover:text-blue-700 transition-colors"
               >
                 {days.length > 0 && (
                   <>
@@ -427,10 +438,10 @@ export default function AvailabilityPage() {
             
             <button
               onClick={goToNextWeek}
-              className="p-2 rounded-lg hover:bg-gray-100 active:bg-gray-200 transition-colors"
+              className="p-2 rounded-lg hover:bg-blue-50 active:bg-blue-100 transition-colors"
               aria-label="Volgende week"
             >
-              <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
               </svg>
             </button>
@@ -444,12 +455,12 @@ export default function AvailabilityPage() {
             const isExpanded = expandedDay === day.date.toDateString();
             const statusClasses = {
               available: 'bg-green-50 border-green-300 hover:bg-green-100',
-              null: 'bg-gray-50 border-gray-200 hover:bg-gray-100',
+              null: 'bg-white border-blue-200 hover:bg-blue-50',
             };
             
             const textClasses = {
               available: 'text-green-700',
-              null: 'text-gray-600',
+              null: 'text-blue-700',
             };
 
             // Alle mogelijke tijdstippen
@@ -516,8 +527,8 @@ export default function AvailabilityPage() {
                           className={`
                             p-2 rounded-lg transition-all duration-200
                             ${isExpanded 
-                              ? 'bg-gray-200 text-gray-800 rotate-45' 
-                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                              ? 'bg-blue-200 text-blue-800 rotate-45' 
+                              : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
                             }
                           `}
                           aria-label="Tijdstippen bewerken"
@@ -615,16 +626,16 @@ export default function AvailabilityPage() {
         </div>
 
         {/* Legenda */}
-        <div className="mt-8 bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          <h3 className="text-sm font-semibold text-gray-900 mb-3">Hoe werkt het?</h3>
+        <div className="mt-8 bg-white rounded-xl shadow-sm border-2 border-blue-200 p-4">
+          <h3 className="text-sm font-semibold text-blue-900 mb-3">Hoe werkt het?</h3>
           <div className="space-y-3 text-sm">
             <div className="flex items-start gap-3">
-              <div className="w-6 h-6 rounded-lg bg-gray-100 border-2 border-gray-300 flex items-center justify-center flex-shrink-0 mt-0.5">
-                <svg className="w-4 h-4 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <div className="w-6 h-6 rounded-lg bg-blue-100 border-2 border-blue-300 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <svg className="w-4 h-4 text-blue-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                 </svg>
               </div>
-              <span className="text-gray-700">Klik op het plusje bij een dag om tijdstippen (ochtend, middag, avond) te selecteren.</span>
+              <span className="text-blue-700">Klik op het plusje bij een dag om tijdstippen (ochtend, middag, avond) te selecteren.</span>
             </div>
             <div className="flex items-start gap-3">
               <div className="w-6 h-6 rounded-lg bg-green-100 border-2 border-green-300 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -632,7 +643,7 @@ export default function AvailabilityPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
                 </svg>
               </div>
-              <span className="text-gray-700">Zodra je een tijdstip selecteert, verandert het plusje in een vinkje. Klik op het vinkje om de dag te vergrendelen.</span>
+              <span className="text-blue-700">Zodra je een tijdstip selecteert, verandert het plusje in een vinkje. Klik op het vinkje om de dag te vergrendelen.</span>
             </div>
             <div className="flex items-start gap-3">
               <div className="w-6 h-6 rounded-lg bg-green-600 border-2 border-green-700 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -640,14 +651,14 @@ export default function AvailabilityPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
                 </svg>
               </div>
-              <span className="text-gray-700">Een vergrendelde dag kan niet meer gewijzigd worden. Klik op "Bewerken" of op het vinkje om te ontgrendelen en aan te passen.</span>
+              <span className="text-blue-700">Een vergrendelde dag kan niet meer gewijzigd worden. Klik op "Bewerken" of op het vinkje om te ontgrendelen en aan te passen.</span>
             </div>
           </div>
         </div>
 
         {/* Info tekst */}
         <div className="mt-6 text-center">
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-blue-600">
             Klik op het plusje om tijdstippen te selecteren, daarna op het vinkje om te vergrendelen
           </p>
         </div>
