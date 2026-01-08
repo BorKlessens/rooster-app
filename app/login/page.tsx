@@ -67,14 +67,14 @@ export default function LoginPage() {
       </div>
 
       {/* Content - geplaatst op het witte gedeelte van de achtergrond */}
-      <div className="relative z-10 h-full w-full flex flex-col items-center justify-center px-6 pb-8" style={{ paddingTop: '40%' }}>
+      <div className="relative z-10 h-full w-full flex flex-col items-center justify-center px-4 sm:px-6 pb-6 sm:pb-8" style={{ paddingTop: 'clamp(25%, 30%, 40%)' }}>
         {/* Formulier op witte gedeelte */}
         <div className="w-full max-w-md animate-fade-in-up">
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
             <div className="animate-slide-in-left" style={{ animationDelay: '0.1s' }}>
               <label 
                 htmlFor="email" 
-                className="block text-sm font-medium text-gray-700 mb-2 transition-colors duration-200"
+                className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2 transition-colors duration-200"
                 style={{ fontFamily: 'var(--font-geist-sans)' }}
               >
                 Email
@@ -87,7 +87,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full px-4 py-3.5 text-base bg-white border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all duration-300 shadow-sm hover:shadow-md hover:border-gray-400 hover:scale-[1.02] active:scale-[0.98]"
+                className="w-full px-3 sm:px-4 py-2.5 sm:py-3.5 text-sm sm:text-base bg-white border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all duration-300 shadow-sm hover:shadow-md hover:border-gray-400 hover:scale-[1.02] active:scale-[0.98]"
                 placeholder="jouw@email.nl"
                 style={{ fontFamily: 'var(--font-geist-sans)' }}
               />
@@ -96,7 +96,7 @@ export default function LoginPage() {
             <div className="animate-slide-in-left" style={{ animationDelay: '0.2s' }}>
               <label 
                 htmlFor="password" 
-                className="block text-sm font-medium text-gray-700 mb-2 transition-colors duration-200"
+                className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2 transition-colors duration-200"
                 style={{ fontFamily: 'var(--font-geist-sans)' }}
               >
                 Wachtwoord
@@ -109,22 +109,22 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="w-full px-4 py-3.5 text-base bg-white border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all duration-300 shadow-sm hover:shadow-md hover:border-gray-400 hover:scale-[1.02] active:scale-[0.98]"
+                className="w-full px-3 sm:px-4 py-2.5 sm:py-3.5 text-sm sm:text-base bg-white border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all duration-300 shadow-sm hover:shadow-md hover:border-gray-400 hover:scale-[1.02] active:scale-[0.98]"
                 placeholder="••••••••"
                 style={{ fontFamily: 'var(--font-geist-sans)' }}
               />
             </div>
             
             {error && (
-              <div className="bg-red-50 border-2 border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm animate-shake">
+              <div className="bg-red-50 border-2 border-red-200 text-red-700 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm animate-shake">
                 {error}
               </div>
             )}
-            
+          
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:shadow-lg mt-2 animate-slide-in-left"
+              className="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold py-3 sm:py-4 px-4 sm:px-6 rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:shadow-lg mt-2 animate-slide-in-left text-sm sm:text-base"
               style={{ fontFamily: 'var(--font-geist-sans)', animationDelay: '0.3s' }}
             >
               <span className="relative">
@@ -137,7 +137,7 @@ export default function LoginPage() {
                   'Inloggen'
                 )}
               </span>
-            </button>
+          </button>
           </form>
         </div>
       </div>

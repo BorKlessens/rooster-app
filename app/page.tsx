@@ -31,9 +31,9 @@ export default function Home() {
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
           <p className="mt-4 text-gray-600">Bezig met laden...</p>
-        </div>
       </div>
-    );
+    </div>
+  );
   }
 
   return null;
