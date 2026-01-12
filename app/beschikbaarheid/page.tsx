@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase, getCurrentUserId, isAdmin } from '@/lib/supabaseClient'
+import { supabase, getCurrentUserId, isAdmin } from '@/lib/supabaseClient';
+import UserHeader from '@/app/components/UserHeader';
 
 /**
  * Beschikbaarheid pagina
@@ -40,6 +41,8 @@ export default function AvailabilityPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [username, setUsername] = useState<string>('');
+  const [fullName, setFullName] = useState<string>('');
   
   // State voor beschikbaarheid per dag
   const [days, setDays] = useState<DayAvailability[]>([]);
@@ -54,11 +57,23 @@ export default function AvailabilityPage() {
     // Check of gebruiker ingelogd is
     const checkAuth = async () => {
       const loggedIn = localStorage.getItem('isLoggedIn') === 'true';
+      const user = localStorage.getItem('username');
       setIsLoggedIn(loggedIn);
+      setUsername(user || '');
       
       if (!loggedIn) {
         router.push('/login');
         return;
+      }
+      
+      // Haal volledige naam op
+      const storedUsers = localStorage.getItem('users');
+      if (storedUsers && user) {
+        const users = JSON.parse(storedUsers);
+        const userData = users.find((u: { username: string }) => u.username === user);
+        if (userData && userData.fullName) {
+          setFullName(userData.fullName);
+        }
       }
       
       // Check of gebruiker admin is
@@ -398,26 +413,24 @@ export default function AvailabilityPage() {
 
   return (
     <div className="min-h-screen bg-blue-50 pb-24">
+      <UserHeader title="Beschikbaarheid" username={username} fullName={fullName} />
       <div className="max-w-2xl mx-auto px-4 py-6 sm:py-8">
-        {/* Header */}
+        {/* Beschrijving */}
         <div className="mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold text-blue-900 mb-2">
-            Beschikbaarheid
-          </h1>
-          <p className="text-sm sm:text-base text-blue-700">
+          <p className="text-sm sm:text-base text-blue-900">
             Geef aan op welke dagen je wel of niet kunt werken
           </p>
         </div>
 
         {/* Week navigatie */}
-        <div className="mb-6 bg-white rounded-xl shadow-sm border-2 border-blue-200 p-4">
+        <div className="mb-6 bg-white rounded-xl shadow-sm border border-blue-200 p-4 hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between">
             <button
               onClick={goToPreviousWeek}
-              className="p-2 rounded-lg hover:bg-blue-50 active:bg-blue-100 transition-colors"
+              className="p-2 rounded-lg hover:bg-blue-50 active:bg-blue-100 transition-all duration-200"
               aria-label="Vorige week"
             >
-              <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="w-5 h-5 text-blue-900" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
               </svg>
             </button>
@@ -438,10 +451,10 @@ export default function AvailabilityPage() {
             
             <button
               onClick={goToNextWeek}
-              className="p-2 rounded-lg hover:bg-blue-50 active:bg-blue-100 transition-colors"
+              className="p-2 rounded-lg hover:bg-blue-50 active:bg-blue-100 transition-all duration-200"
               aria-label="Volgende week"
             >
-              <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="w-5 h-5 text-blue-900" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
               </svg>
             </button>
@@ -460,7 +473,7 @@ export default function AvailabilityPage() {
             
             const textClasses = {
               available: 'text-green-700',
-              null: 'text-blue-700',
+              null: 'text-blue-900',
             };
 
             // Alle mogelijke tijdstippen
@@ -470,7 +483,7 @@ export default function AvailabilityPage() {
               <div
                 key={day.date.toISOString()}
                 className={`
-                  w-full rounded-xl border-2 transition-all duration-200
+                  w-full rounded-xl border transition-all duration-200
                   shadow-sm hover:shadow-md
                   ${statusClasses[day.status || 'null']}
                   ${isTodayDate ? 'ring-2 ring-blue-400 ring-offset-2' : ''}
@@ -489,7 +502,7 @@ export default function AvailabilityPage() {
                           {formatDate(day.date)}
                         </div>
                         {isTodayDate && (
-                          <div className="text-xs text-blue-600 font-medium mt-1">
+                          <div className="text-xs text-blue-900 font-medium mt-1">
                             Vandaag
                           </div>
                         )}
@@ -508,10 +521,10 @@ export default function AvailabilityPage() {
                         <button
                           onClick={(e) => toggleLock(day.date, e)}
                           className={`
-                            p-2 rounded-lg transition-all duration-200
+                            p-2 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md
                             ${day.locked
-                              ? 'bg-green-600 text-white hover:bg-green-700'
-                              : 'bg-green-100 text-green-700 hover:bg-green-200'
+                              ? 'bg-green-600 text-white hover:bg-green-700 active:bg-green-800'
+                              : 'bg-green-100 text-green-700 hover:bg-green-200 active:bg-green-300'
                             }
                           `}
                           aria-label={day.locked ? "Ontgrendel dag" : "Vergrendel dag"}
@@ -525,10 +538,10 @@ export default function AvailabilityPage() {
                         <button
                           onClick={(e) => toggleExpanded(day.date, e)}
                           className={`
-                            p-2 rounded-lg transition-all duration-200
+                            p-2 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md
                             ${isExpanded 
-                              ? 'bg-blue-200 text-blue-800 rotate-45' 
-                              : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
+                              ? 'bg-blue-200 text-blue-800 rotate-45 active:scale-95' 
+                              : 'bg-blue-100 text-blue-900 hover:bg-blue-200 active:bg-blue-300 active:scale-95'
                             }
                           `}
                           aria-label="Tijdstippen bewerken"
@@ -544,7 +557,7 @@ export default function AvailabilityPage() {
 
                 {/* Uitgeklapte tijdstippen - zichtbaar als expanded en niet gelocked */}
                 {isExpanded && !day.locked && (
-                  <div className={`px-4 pb-4 pt-2 border-t-2 ${day.status === 'available' ? 'border-green-200' : 'border-gray-200'}`}>
+                  <div className={`px-4 pb-4 pt-2 border-t ${day.status === 'available' ? 'border-green-200' : 'border-gray-200'}`}>
                     <div className={`text-xs font-medium mb-3 ${day.status === 'available' ? 'text-green-700' : 'text-gray-700'}`}>
                       Selecteer tijdstippen:
                     </div>
@@ -581,7 +594,7 @@ export default function AvailabilityPage() {
                 
                 {/* Locked indicator - toon geselecteerde tijdstippen als gelocked */}
                 {day.locked && day.timeSlots.length > 0 && (
-                  <div className="px-4 pb-4 pt-2 border-t-2 border-green-200">
+                  <div className="px-4 pb-4 pt-2 border-t border-green-200">
                     <div className="flex items-center justify-between mb-3">
                       <div className="text-xs font-medium text-green-700">
                         Vergrendeld - Geselecteerde tijdstippen:
@@ -594,7 +607,7 @@ export default function AvailabilityPage() {
                           // Ontgrendel daarna (met keepExpanded=true zodat het niet weer inklapt)
                           toggleLock(day.date, e, true);
                         }}
-                        className="px-3 py-1.5 text-xs font-medium text-green-700 bg-green-50 hover:bg-green-100 border border-green-300 rounded-lg transition-colors flex items-center gap-1.5"
+                        className="px-3 py-1.5 text-xs font-medium text-green-700 bg-green-50 hover:bg-green-100 active:bg-green-200 border border-green-300 rounded-lg transition-all duration-200 flex items-center gap-1.5 shadow-sm hover:shadow-md"
                         aria-label="Bewerken"
                       >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -626,16 +639,16 @@ export default function AvailabilityPage() {
         </div>
 
         {/* Legenda */}
-        <div className="mt-8 bg-white rounded-xl shadow-sm border-2 border-blue-200 p-4">
+        <div className="mt-8 bg-white rounded-xl shadow-sm border border-blue-200 p-4 hover:shadow-md transition-shadow">
           <h3 className="text-sm font-semibold text-blue-900 mb-3">Hoe werkt het?</h3>
           <div className="space-y-3 text-sm">
             <div className="flex items-start gap-3">
               <div className="w-6 h-6 rounded-lg bg-blue-100 border-2 border-blue-300 flex items-center justify-center flex-shrink-0 mt-0.5">
-                <svg className="w-4 h-4 text-blue-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <svg className="w-4 h-4 text-blue-900" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                 </svg>
               </div>
-              <span className="text-blue-700">Klik op het plusje bij een dag om tijdstippen (ochtend, middag, avond) te selecteren.</span>
+              <span className="text-blue-900">Klik op het plusje bij een dag om tijdstippen (ochtend, middag, avond) te selecteren.</span>
             </div>
             <div className="flex items-start gap-3">
               <div className="w-6 h-6 rounded-lg bg-green-100 border-2 border-green-300 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -643,7 +656,7 @@ export default function AvailabilityPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
                 </svg>
               </div>
-              <span className="text-blue-700">Zodra je een tijdstip selecteert, verandert het plusje in een vinkje. Klik op het vinkje om de dag te vergrendelen.</span>
+              <span className="text-blue-900">Zodra je een tijdstip selecteert, verandert het plusje in een vinkje. Klik op het vinkje om de dag te vergrendelen.</span>
             </div>
             <div className="flex items-start gap-3">
               <div className="w-6 h-6 rounded-lg bg-green-600 border-2 border-green-700 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -651,14 +664,14 @@ export default function AvailabilityPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
                 </svg>
               </div>
-              <span className="text-blue-700">Een vergrendelde dag kan niet meer gewijzigd worden. Klik op "Bewerken" of op het vinkje om te ontgrendelen en aan te passen.</span>
+              <span className="text-blue-900">Een vergrendelde dag kan niet meer gewijzigd worden. Klik op "Bewerken" of op het vinkje om te ontgrendelen en aan te passen.</span>
             </div>
           </div>
         </div>
 
         {/* Info tekst */}
         <div className="mt-6 text-center">
-          <p className="text-xs text-blue-600">
+          <p className="text-xs text-blue-900">
             Klik op het plusje om tijdstippen te selecteren, daarna op het vinkje om te vergrendelen
           </p>
         </div>

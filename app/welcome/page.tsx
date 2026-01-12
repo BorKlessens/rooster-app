@@ -66,13 +66,13 @@ export default function WelcomePage() {
         <div className="w-full max-w-sm space-y-4 mb-12">
           <button
             onClick={() => router.push('/login')}
-            className="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold py-4 px-6 rounded-xl transition-colors duration-200 shadow-lg"
+            className="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-200 shadow-md hover:shadow-lg active:shadow-md hover:scale-[1.01] active:scale-[0.99]"
           >
             LOGIN
           </button>
           <button
             onClick={() => router.push('/signup')}
-            className="w-full bg-blue-400/30 hover:bg-blue-400/40 active:bg-blue-400/50 border-2 border-blue-300/50 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-200 shadow-lg"
+            className="w-full bg-blue-400/30 hover:bg-blue-400/40 active:bg-blue-400/50 border border-blue-300/50 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-200 shadow-md hover:shadow-lg active:shadow-md hover:scale-[1.01] active:scale-[0.99]"
           >
             SIGN UP
           </button>

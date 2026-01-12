@@ -114,6 +114,16 @@ export default function AdminAvailabilityPage() {
     })
   }
 
+  const handleQuickPlan = (userId: string, username: string) => {
+    // Navigeer naar inplannen pagina met user_id en date als query parameters
+    const params = new URLSearchParams({
+      user_id: userId,
+      date: selectedDate,
+      username: username
+    })
+    router.push(`/admin/inplannen?${params.toString()}`)
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -144,7 +154,7 @@ export default function AdminAvailabilityPage() {
         </div>
 
         {/* Filters */}
-        <div className="mb-4 sm:mb-6 bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 space-y-3 sm:space-y-4">
+        <div className="mb-4 sm:mb-6 bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 space-y-3 sm:space-y-4 hover:shadow-md transition-shadow">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2">
@@ -154,7 +164,7 @@ export default function AdminAvailabilityPage() {
                 type="date"
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all hover:border-gray-400"
               />
             </div>
             <div>
@@ -166,7 +176,7 @@ export default function AdminAvailabilityPage() {
                 value={filterUsername}
                 onChange={(e) => setFilterUsername(e.target.value)}
                 placeholder="Zoek op naam..."
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all hover:border-gray-400"
               />
             </div>
           </div>
@@ -187,9 +197,22 @@ export default function AdminAvailabilityPage() {
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-base sm:text-lg font-bold text-gray-900 mb-2 sm:mb-3">
-                      {item.username}
-                    </h3>
+                    <div className="flex items-center justify-between mb-2 sm:mb-3">
+                      <h3 className="text-base sm:text-lg font-bold text-gray-900">
+                        {item.username}
+                      </h3>
+                      <button
+                        onClick={() => handleQuickPlan(item.user_id, item.username)}
+                        className="flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-4 sm:py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs sm:text-sm font-medium rounded-lg transition-all duration-200 shadow-sm hover:shadow-md"
+                        title="Snel inplannen"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                        </svg>
+                        <span className="hidden sm:inline">Inplannen</span>
+                        <span className="sm:hidden">Plan</span>
+                      </button>
+                    </div>
                     <div className="space-y-1.5 sm:space-y-2 text-xs sm:text-sm">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium text-gray-700">Status:</span>

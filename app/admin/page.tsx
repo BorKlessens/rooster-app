@@ -77,7 +77,7 @@ export default function AdminPage() {
         {/* Placeholder content voor admin functionaliteit */}
         <div className="grid gap-4 sm:gap-6 md:grid-cols-2">
           {/* Shifts beheren card */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
             <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-3 sm:mb-4">
               Shifts beheren
             </h2>
@@ -85,7 +85,7 @@ export default function AdminPage() {
               Maak nieuwe shifts aan en wijzig bestaande shifts
             </p>
             <button
-              className="w-full sm:w-auto bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-xs sm:text-sm font-medium"
+              className="w-full sm:w-auto bg-blue-600 text-white px-4 py-2.5 rounded-lg hover:bg-blue-700 active:bg-blue-800 transition-all duration-200 text-xs sm:text-sm font-medium shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
               disabled
             >
               Nieuwe shift (binnenkort)
@@ -93,7 +93,7 @@ export default function AdminPage() {
           </div>
           
           {/* Inplannen card */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
             <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-3 sm:mb-4">
               Inplannen
             </h2>
@@ -102,14 +102,14 @@ export default function AdminPage() {
             </p>
             <a
               href="/admin/inplannen"
-              className="inline-block w-full sm:w-auto text-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-xs sm:text-sm font-medium"
+              className="inline-block w-full sm:w-auto text-center bg-blue-600 text-white px-4 py-2.5 rounded-lg hover:bg-blue-700 active:bg-blue-800 transition-all duration-200 text-xs sm:text-sm font-medium shadow-sm hover:shadow-md"
             >
               Medewerker inplannen
             </a>
           </div>
           
           {/* Beschikbaarheid overzicht card */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
             <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-3 sm:mb-4">
               Beschikbaarheid
             </h2>
@@ -118,14 +118,14 @@ export default function AdminPage() {
             </p>
             <a
               href="/admin/beschikbaarheid"
-              className="inline-block w-full sm:w-auto text-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-xs sm:text-sm font-medium"
+              className="inline-block w-full sm:w-auto text-center bg-blue-600 text-white px-4 py-2.5 rounded-lg hover:bg-blue-700 active:bg-blue-800 transition-all duration-200 text-xs sm:text-sm font-medium shadow-sm hover:shadow-md"
             >
               Bekijk beschikbaarheid
             </a>
           </div>
           
           {/* Rooster beheer card */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
             <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-3 sm:mb-4">
               Rooster beheer
             </h2>

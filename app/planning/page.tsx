@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { isAdmin, supabase, getCurrentUserId } from '@/lib/supabaseClient';
+import UserHeader from '@/app/components/UserHeader';
 
 /**
  * Planning / Rooster pagina
@@ -89,6 +90,8 @@ export default function PlanningPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [username, setUsername] = useState<string>('');
+  const [fullName, setFullName] = useState<string>('');
   
   // State voor huidige maand
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
@@ -103,11 +106,23 @@ export default function PlanningPage() {
     // Check of gebruiker ingelogd is
     const checkAuth = async () => {
       const loggedIn = localStorage.getItem('isLoggedIn') === 'true';
+      const user = localStorage.getItem('username');
       setIsLoggedIn(loggedIn);
+      setUsername(user || '');
       
       if (!loggedIn) {
         router.push('/login');
         return;
+      }
+      
+      // Haal volledige naam op
+      const storedUsers = localStorage.getItem('users');
+      if (storedUsers && user) {
+        const users = JSON.parse(storedUsers);
+        const userData = users.find((u: { username: string }) => u.username === user);
+        if (userData && userData.fullName) {
+          setFullName(userData.fullName);
+        }
       }
       
       // Check of gebruiker admin is
@@ -150,13 +165,21 @@ export default function PlanningPage() {
     const monthStart = new Date(year, month, 1);
     const monthEnd = new Date(year, month + 1, 0);
 
+    // Formatteer datums zonder tijdzone problemen
+    const formatDateForQuery = (date: Date): string => {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    };
+
     try {
       // Haal ALLE shifts op (niet alleen van ingelogde gebruiker)
       const { data, error } = await supabase
         .from('shifts')
         .select('*')
-        .gte('date', monthStart.toISOString().split('T')[0])
-        .lte('date', monthEnd.toISOString().split('T')[0])
+        .gte('date', formatDateForQuery(monthStart))
+        .lte('date', formatDateForQuery(monthEnd))
         .order('date', { ascending: true })
         .order('start_time', { ascending: true });
 
@@ -171,6 +194,16 @@ export default function PlanningPage() {
       // Transform data naar Map
       const shiftsMap = new Map<string, Shift[]>();
       if (data && data.length > 0) {
+        // Helper functie om tijd te formatteren (verwijder seconden)
+        const formatTimeFromDB = (time: string): string => {
+          if (!time) return '';
+          // Als tijd in "HH:MM:SS" formaat is, haal de seconden eraf
+          if (time.includes(':') && time.split(':').length === 3) {
+            return time.substring(0, 5); // "HH:MM"
+          }
+          return time;
+        };
+
         data.forEach((shift: any) => {
           const dateString = shift.date;
           if (!shiftsMap.has(dateString)) {
@@ -180,8 +213,8 @@ export default function PlanningPage() {
             id: shift.id,
             user_id: shift.user_id,
             username: shift.username,
-            startTime: shift.start_time,
-            endTime: shift.end_time,
+            startTime: formatTimeFromDB(shift.start_time),
+            endTime: formatTimeFromDB(shift.end_time),
             role: shift.role || undefined,
             description: shift.description || undefined,
           });
@@ -255,10 +288,20 @@ export default function PlanningPage() {
   };
 
   /**
+   * Formatteer datum naar YYYY-MM-DD string (zonder tijdzone problemen)
+   */
+  const formatDateToString = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  /**
    * Haal diensten op voor een specifieke datum
    */
   const getShiftsForDate = (date: Date): Shift[] => {
-    const dateString = date.toISOString().split('T')[0];
+    const dateString = formatDateToString(date);
     return shiftsData.get(dateString) || [];
   };
 
@@ -283,9 +326,14 @@ export default function PlanningPage() {
   };
 
   /**
-   * Formatteer tijd voor weergave
+   * Formatteer tijd voor weergave (verwijder seconden als die er zijn)
    */
   const formatTime = (time: string): string => {
+    if (!time) return '';
+    // Als tijd in "HH:MM:SS" formaat is, haal de seconden eraf
+    if (time.includes(':') && time.split(':').length === 3) {
+      return time.substring(0, 5); // Neem alleen eerste 5 karakters "HH:MM"
+    }
     return time; // Al in "HH:MM" format
   };
 
@@ -359,104 +407,131 @@ export default function PlanningPage() {
     
     return (
       <div className="min-h-screen bg-blue-50 pb-24">
+        <UserHeader title="Rooster" username={username} fullName={fullName} />
         <div className="max-w-2xl mx-auto px-4 py-6 sm:py-8">
           {/* Header met terug knop */}
           <div className="mb-6">
-            <button
-              onClick={() => setSelectedDay(null)}
-              className="flex items-center gap-2 text-blue-600 hover:text-blue-800 mb-4 transition-colors"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-              </svg>
-              <span className="text-sm font-medium">Terug naar maandoverzicht</span>
-            </button>
+            <div className="flex items-center justify-between mb-4 gap-3">
+              <button
+                onClick={() => setSelectedDay(null)}
+                className="flex items-center gap-2 text-blue-900 hover:text-blue-800 active:text-blue-900 transition-all duration-200"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                </svg>
+                <span className="text-sm font-medium">Terug naar maandoverzicht</span>
+              </button>
+              
+              {/* Sneltoets naar vandaag */}
+              {!isToday(selectedDay) && (
+                <button
+                  onClick={() => {
+                    const today = new Date();
+                    setSelectedDay(today);
+                  }}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs sm:text-sm font-medium rounded-lg transition-all duration-200 shadow-sm hover:shadow-md"
+                  title="Ga naar vandaag"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                  </svg>
+                  <span>Vandaag</span>
+                </button>
+              )}
+            </div>
             
-            <h1 className="text-2xl sm:text-3xl font-bold text-blue-900 mb-2">
-              {formatDate(selectedDay)}
-            </h1>
-            <p className="text-sm text-blue-600">
-              {sortedShifts.length > 0 
-                ? `${sortedShifts.length} ${sortedShifts.length === 1 ? 'medewerker' : 'medewerkers'} ingepland`
-                : 'Geen medewerkers ingepland'}
-            </p>
+            {/* Datum navigatie met pijltjes */}
+            <div className="flex items-center justify-between mb-4 gap-3 sm:gap-4">
+              <button
+                onClick={() => {
+                  const prevDay = new Date(selectedDay);
+                  prevDay.setDate(prevDay.getDate() - 1);
+                  setSelectedDay(prevDay);
+                }}
+                className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-blue-100 hover:bg-blue-200 active:bg-blue-300 text-blue-900 transition-all duration-200 flex-shrink-0 shadow-sm hover:shadow-md"
+                aria-label="Vorige dag"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                </svg>
+              </button>
+              
+              <div className="flex-1 text-center min-w-0 px-2">
+                <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-900 mb-2 break-words">
+                  {formatDate(selectedDay)}
+                </h1>
+                <p className="text-xs sm:text-sm text-blue-900">
+                  {sortedShifts.length > 0 
+                    ? `${sortedShifts.length} ${sortedShifts.length === 1 ? 'medewerker' : 'medewerkers'} ingepland`
+                    : 'Geen medewerkers ingepland'}
+                </p>
+              </div>
+              
+              <button
+                onClick={() => {
+                  const nextDay = new Date(selectedDay);
+                  nextDay.setDate(nextDay.getDate() + 1);
+                  setSelectedDay(nextDay);
+                }}
+                className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-blue-100 hover:bg-blue-200 active:bg-blue-300 text-blue-900 transition-all duration-200 flex-shrink-0 shadow-sm hover:shadow-md"
+                aria-label="Volgende dag"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                </svg>
+              </button>
+            </div>
           </div>
 
-          {/* Diensten lijst - alle werknemers */}
+          {/* Diensten lijst - alle werknemers (compact) */}
           {sortedShifts.length > 0 ? (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {sortedShifts.map((shift) => {
                 const isMyShiftValue = isMyShift(shift);
                 return (
                   <div
                     key={shift.id}
-                    className={`rounded-xl shadow-sm border-2 p-4 sm:p-5 transition-colors ${
+                    className={`rounded-xl shadow-sm border p-2.5 sm:p-3 transition-all duration-200 hover:shadow-md ${
                       isMyShiftValue
-                        ? 'bg-green-50 border-green-400 hover:border-green-500'
+                        ? 'bg-green-50 border-green-300 hover:border-green-400'
                         : 'bg-white border-blue-200 hover:border-blue-300'
                     }`}
                   >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        {/* Werknemer naam */}
-                        <div className="flex items-center gap-2 mb-2">
-                          <h3 className={`text-base sm:text-lg font-bold ${
-                            isMyShiftValue ? 'text-green-900' : 'text-blue-900'
-                          }`}>
-                            {shift.username}
-                          </h3>
-                          {isMyShiftValue && (
-                            <span className="px-2 py-0.5 bg-green-600 text-white text-xs font-medium rounded">
-                              Jij
-                            </span>
-                          )}
-                        </div>
-                        
-                        {/* Tijden */}
-                        <div className="flex items-center gap-3 mb-2">
-                          <div className={`text-lg sm:text-xl font-bold ${
-                            isMyShiftValue ? 'text-green-800' : 'text-blue-900'
-                          }`}>
-                            {formatTime(shift.startTime)}
-                          </div>
-                          <svg className={`w-4 h-4 ${
-                            isMyShiftValue ? 'text-green-500' : 'text-blue-400'
-                          }`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-                          </svg>
-                          <div className={`text-lg sm:text-xl font-bold ${
-                            isMyShiftValue ? 'text-green-800' : 'text-blue-900'
-                          }`}>
-                            {formatTime(shift.endTime)}
-                          </div>
-                        </div>
-                        
-                        {/* Rol */}
-                        {shift.role && (
-                          <div className={`text-sm font-medium mb-1 ${
-                            isMyShiftValue ? 'text-green-700' : 'text-blue-600'
-                          }`}>
-                            {shift.role}
-                          </div>
-                        )}
-                        
-                        {/* Beschrijving */}
-                        {shift.description && (
-                          <div className={`text-sm ${
-                            isMyShiftValue ? 'text-green-700' : 'text-blue-700'
-                          }`}>
-                            {shift.description}
-                          </div>
-                        )}
+                    <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                      {/* Tijd en naam */}
+                      <div className={`text-sm sm:text-base font-semibold whitespace-nowrap ${
+                        isMyShiftValue ? 'text-green-800' : 'text-blue-900'
+                      }`}>
+                        {formatTime(shift.startTime)} - {formatTime(shift.endTime)}
                       </div>
+                      <span className={`text-sm sm:text-base font-medium truncate ${
+                        isMyShiftValue ? 'text-green-900' : 'text-blue-900'
+                      }`}>
+                        {shift.username}
+                      </span>
+                      {isMyShiftValue && (
+                        <span className="px-1.5 py-0.5 bg-green-600 text-white text-xs font-medium rounded flex-shrink-0">
+                          Jij
+                        </span>
+                      )}
                     </div>
                   </div>
                 );
               })}
+              
+              {/* Meer info knop voor de hele dag */}
+              <div className="mt-4 pt-4 border-t border-blue-200">
+                <button
+                  onClick={() => router.push(`/planning/day/${selectedDay.toISOString().split('T')[0]}`)}
+                  className="w-full px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm font-medium rounded-lg transition-all duration-200 shadow-sm hover:shadow-md"
+                >
+                  Meer info over deze dag
+                </button>
+              </div>
             </div>
           ) : (
             /* Lege staat */
-            <div className="bg-white rounded-xl shadow-sm border-2 border-blue-200 p-8 sm:p-12 text-center">
+            <div className="bg-white rounded-xl shadow-sm border border-blue-200 p-8 sm:p-12 text-center hover:shadow-md transition-shadow">
               <svg
                 className="w-16 h-16 text-blue-300 mx-auto mb-4"
                 fill="none"
@@ -473,7 +548,7 @@ export default function PlanningPage() {
               <h3 className="text-lg font-semibold text-blue-900 mb-2">
                 Geen diensten
               </h3>
-              <p className="text-sm text-blue-600">
+              <p className="text-sm text-blue-900">
                 Er zijn op deze dag geen medewerkers ingepland.
               </p>
             </div>
@@ -489,26 +564,24 @@ export default function PlanningPage() {
 
   return (
     <div className="min-h-screen bg-blue-50 pb-24">
+      <UserHeader title="Rooster" username={username} fullName={fullName} />
       <div className="max-w-4xl mx-auto px-4 py-6 sm:py-8">
-        {/* Header */}
+        {/* Beschrijving */}
         <div className="mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold text-blue-900 mb-2">
-            Rooster
-          </h1>
-          <p className="text-sm sm:text-base text-blue-700">
+          <p className="text-sm sm:text-base text-blue-900">
             Bekijk je ingeplande diensten
           </p>
         </div>
 
         {/* Maand navigatie */}
-        <div className="mb-6 bg-white rounded-xl shadow-sm border-2 border-blue-200 p-4">
+        <div className="mb-6 bg-white rounded-xl shadow-sm border border-blue-200 p-4 hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between">
             <button
               onClick={goToPreviousMonth}
-              className="p-2 rounded-lg hover:bg-blue-50 active:bg-blue-100 transition-colors"
+              className="p-2 rounded-lg hover:bg-blue-50 active:bg-blue-100 transition-all duration-200"
               aria-label="Vorige maand"
             >
-              <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="w-5 h-5 text-blue-900" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
               </svg>
             </button>
@@ -524,10 +597,10 @@ export default function PlanningPage() {
             
             <button
               onClick={goToNextMonth}
-              className="p-2 rounded-lg hover:bg-blue-50 active:bg-blue-100 transition-colors"
+              className="p-2 rounded-lg hover:bg-blue-50 active:bg-blue-100 transition-all duration-200"
               aria-label="Volgende maand"
             >
-              <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="w-5 h-5 text-blue-900" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
               </svg>
             </button>
@@ -535,13 +608,13 @@ export default function PlanningPage() {
         </div>
 
         {/* Kalender grid */}
-        <div className="bg-white rounded-xl shadow-sm border-2 border-blue-200 overflow-hidden">
+        <div className="bg-white rounded-xl shadow-sm border border-blue-200 overflow-hidden hover:shadow-md transition-shadow">
           {/* Weekdag headers */}
           <div className="grid grid-cols-7 border-b-2 border-blue-200">
             {weekDays.map((day, index) => (
               <div
                 key={index}
-                className="p-2 sm:p-3 text-center text-xs sm:text-sm font-semibold text-blue-700 bg-blue-50"
+                className="p-2 sm:p-3 text-center text-xs sm:text-sm font-semibold text-blue-900 bg-blue-50"
               >
                 {day}
               </div>
@@ -579,61 +652,39 @@ export default function PlanningPage() {
                   `}
                 >
                   <div className="flex flex-col items-center justify-center h-full">
-                    {/* Datum nummer */}
+                    {/* Datumnummer als gekleurde cirkel */}
                     <div
                       className={`
-                        text-xs sm:text-sm font-medium mb-1
-                        ${isCurrentMonthDate 
-                          ? isTodayDate 
-                            ? 'text-blue-700 font-bold' 
-                            : 'text-blue-900'
-                          : 'text-blue-400'
+                        w-8 h-8 sm:w-9 sm:h-9 rounded-full
+                        flex items-center justify-center
+                        text-xs sm:text-sm font-semibold
+                        transition-all duration-200
+                        ${
+                          hasMyShifts
+                            ? isTodayDate
+                              ? 'bg-green-600 text-white ring-2 ring-green-400 ring-offset-1'
+                              : 'bg-green-500 text-white'
+                            : hasOtherShifts
+                              ? isTodayDate
+                                ? 'bg-blue-600 text-white ring-2 ring-blue-400 ring-offset-1'
+                                : 'bg-blue-500 text-white'
+                              : isTodayDate
+                                ? 'bg-blue-600 text-white ring-2 ring-blue-400 ring-offset-1'
+                                : isCurrentMonthDate
+                                  ? 'bg-gray-100 text-gray-700'
+                                  : 'bg-gray-50 text-gray-400'
                         }
                       `}
+                      title={
+                        hasShifts
+                          ? hasMyShifts
+                            ? `${myShifts.length} ${myShifts.length === 1 ? 'eigen dienst' : 'eigen diensten'}${hasOtherShifts ? `, ${otherShifts.length} ${otherShifts.length === 1 ? 'andere dienst' : 'andere diensten'}` : ''}`
+                            : `${otherShifts.length} ${otherShifts.length === 1 ? 'dienst' : 'diensten'}`
+                          : 'Geen diensten'
+                      }
                     >
                       {day.getDate()}
                     </div>
-
-                    {/* Diensten indicator */}
-                    {hasShifts && (
-                      <div className="flex gap-0.5 sm:gap-1 justify-center flex-wrap">
-                        {/* Eigen shifts (groen) */}
-                        {hasMyShifts && (
-                          <div
-                            className={`
-                              w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full
-                              ${isTodayDate ? 'bg-green-600' : 'bg-green-500'}
-                            `}
-                            title="Jouw dienst"
-                          />
-                        )}
-                        {/* Andere shifts (blauw) */}
-                        {hasOtherShifts && (
-                          <>
-                            {otherShifts.slice(0, hasMyShifts ? 2 : 3).map((_, shiftIndex) => (
-                              <div
-                                key={`other-${shiftIndex}`}
-                                className={`
-                                  w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full
-                                  ${isTodayDate ? 'bg-blue-600' : 'bg-blue-500'}
-                                `}
-                              />
-                            ))}
-                            {otherShifts.length > (hasMyShifts ? 2 : 3) && (
-                              <div className="text-[8px] sm:text-[10px] text-blue-600 font-medium">
-                                +{otherShifts.length - (hasMyShifts ? 2 : 3)}
-                              </div>
-                            )}
-                          </>
-                        )}
-                        {/* Totaal aantal als er veel zijn */}
-                        {dayShifts.length > 4 && (
-                          <div className="text-[8px] sm:text-[10px] text-blue-600 font-medium">
-                            {dayShifts.length}
-                          </div>
-                        )}
-                      </div>
-                    )}
                   </div>
                 </button>
               );
@@ -642,19 +693,25 @@ export default function PlanningPage() {
         </div>
 
         {/* Legenda */}
-        <div className="mt-6 bg-white rounded-xl shadow-sm border-2 border-blue-200 p-4">
+        <div className="mt-6 bg-white rounded-xl shadow-sm border border-blue-200 p-4 hover:shadow-md transition-shadow">
           <div className="flex items-center gap-4 text-xs sm:text-sm flex-wrap">
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-green-500"></div>
-              <span className="text-blue-700">Jouw dienst</span>
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-green-500 text-white flex items-center justify-center text-xs sm:text-sm font-semibold">
+                15
+              </div>
+              <span className="text-blue-900">Jouw dienst</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-              <span className="text-blue-700">Andere diensten</span>
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs sm:text-sm font-semibold">
+                20
+              </div>
+              <span className="text-blue-900">Andere diensten</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 border-2 border-blue-500 rounded"></div>
-              <span className="text-blue-700">Vandaag</span>
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gray-100 text-gray-700 flex items-center justify-center text-xs sm:text-sm font-semibold">
+                25
+              </div>
+              <span className="text-blue-900">Geen diensten</span>
             </div>
           </div>
         </div>

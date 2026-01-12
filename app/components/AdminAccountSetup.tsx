@@ -9,9 +9,10 @@ import { createAdminAccountIfNeeded } from '@/lib/createAdminAccount'
  */
 export default function AdminAccountSetup() {
   useEffect(() => {
-    createAdminAccountIfNeeded()
+    createAdminAccountIfNeeded().catch(console.error)
   }, [])
 
   return null
 }
+
 

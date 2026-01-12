@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useState, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase, isAdmin, getCurrentUserId } from '@/lib/supabaseClient'
 import AdminNav from '@/app/components/AdminNav'
 
@@ -17,8 +17,9 @@ interface User {
   fullName?: string
 }
 
-export default function AdminInplannenPage() {
+function AdminInplannenPageContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [isLoading, setIsLoading] = useState(true)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [isAdminUser, setIsAdminUser] = useState(false)
@@ -27,7 +28,7 @@ export default function AdminInplannenPage() {
   const [successMessage, setSuccessMessage] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
 
-  // Form state
+  // Form state - haal query parameters op voor quick plan
   const [selectedUserId, setSelectedUserId] = useState('')
   const [date, setDate] = useState('')
   const [startTime, setStartTime] = useState('09:00')
@@ -54,25 +55,122 @@ export default function AdminInplannenPage() {
         return
       }
       
-      // Laad gebruikers
-      loadUsers()
+      // Laad gebruikers (nu async)
+      await loadUsers()
+      
+      // Haal query parameters op voor quick plan vanuit beschikbaarheid
+      const userIdParam = searchParams.get('user_id')
+      const dateParam = searchParams.get('date')
+      const usernameParam = searchParams.get('username')
+      
+      if (userIdParam && dateParam) {
+        // Zet de formulier velden in met de query parameters
+        setSelectedUserId(userIdParam)
+        setDate(dateParam)
+        
+        // Toon success message
+        if (usernameParam) {
+          setSuccessMessage(`${usernameParam} is vooringevuld. Vul de rest van de gegevens in.`)
+        }
+      }
+      
       setIsLoading(false)
     }
     
     checkAuth()
-  }, [router])
+  }, [router, searchParams])
 
-  const loadUsers = () => {
+  const loadUsers = async () => {
     try {
-      const storedUsers = localStorage.getItem('users')
+      // Probeer eerst gebruikers op te halen uit Supabase
+      const { data: supabaseUsers, error: supabaseError } = await supabase
+        .from('users')
+        .select('id, username, full_name, role')
+        .neq('role', 'admin') // Alle gebruikers behalve admin (inclusief null/undefined roles)
+        .order('username', { ascending: true });
+
+      // Debug logging
+      console.log('Supabase users loaded:', supabaseUsers);
+      console.log('Supabase error:', supabaseError);
+
+      if (supabaseError) {
+        console.error('Error loading users from Supabase:', supabaseError);
+        // Fallback naar localStorage
+        const storedUsers = localStorage.getItem('users');
+        if (storedUsers) {
+          const usersData = JSON.parse(storedUsers);
+          const regularUsers = usersData
+            .filter((u: { role?: string }) => u.role !== 'admin')
+            .map((u: any) => ({
+              id: u.id,
+              username: u.username,
+              fullName: u.fullName || u.full_name,
+            }));
+          setUsers(regularUsers);
+        }
+        return;
+      }
+
+      if (supabaseUsers && supabaseUsers.length > 0) {
+        // Transformeer Supabase data naar het verwachte formaat
+        const formattedUsers = supabaseUsers.map((user) => ({
+          id: user.id,
+          username: user.username,
+          fullName: user.full_name || user.username,
+        }));
+        console.log('Formatted users for dropdown:', formattedUsers);
+        setUsers(formattedUsers);
+        
+        // Sla ook op in localStorage voor backward compatibility
+        const storedUsers = localStorage.getItem('users');
+        const usersArray = storedUsers ? JSON.parse(storedUsers) : [];
+        supabaseUsers.forEach((supabaseUser) => {
+          const existingIndex = usersArray.findIndex((u: { id: string }) => u.id === supabaseUser.id);
+          if (existingIndex === -1) {
+            usersArray.push({
+              id: supabaseUser.id,
+              username: supabaseUser.username,
+              fullName: supabaseUser.full_name,
+              role: supabaseUser.role,
+            });
+          }
+        });
+        localStorage.setItem('users', JSON.stringify(usersArray));
+        return;
+      }
+
+      // Als Supabase leeg is, probeer localStorage als fallback
+      const storedUsers = localStorage.getItem('users');
       if (storedUsers) {
-        const usersData = JSON.parse(storedUsers)
-        // Filter admin accounts eruit
-        const regularUsers = usersData.filter((u: { role?: string }) => u.role !== 'admin')
-        setUsers(regularUsers)
+        const usersData = JSON.parse(storedUsers);
+        const regularUsers = usersData
+          .filter((u: { role?: string }) => u.role !== 'admin')
+          .map((u: any) => ({
+            id: u.id,
+            username: u.username,
+            fullName: u.fullName || u.full_name,
+          }));
+        setUsers(regularUsers);
       }
     } catch (error) {
-      console.error('Error loading users:', error)
+      console.error('Error loading users:', error);
+      // Fallback naar localStorage bij error
+      try {
+        const storedUsers = localStorage.getItem('users');
+        if (storedUsers) {
+          const usersData = JSON.parse(storedUsers);
+          const regularUsers = usersData
+            .filter((u: { role?: string }) => u.role !== 'admin')
+            .map((u: any) => ({
+              id: u.id,
+              username: u.username,
+              fullName: u.fullName || u.full_name,
+            }));
+          setUsers(regularUsers);
+        }
+      } catch (localError) {
+        console.error('Error loading from localStorage:', localError);
+      }
     }
   }
 
@@ -162,18 +260,18 @@ export default function AdminInplannenPage() {
 
         {/* Success/Error messages */}
         {successMessage && (
-          <div className="mb-4 bg-green-50 border-2 border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">
+          <div className="mb-4 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl text-sm shadow-sm">
             {successMessage}
           </div>
         )}
         {errorMessage && (
-          <div className="mb-4 bg-red-50 border-2 border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+          <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm shadow-sm">
             {errorMessage}
           </div>
         )}
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 space-y-4 sm:space-y-6">
+        <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 space-y-4 sm:space-y-6 hover:shadow-md transition-shadow">
           {/* Medewerker selectie */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -183,7 +281,7 @@ export default function AdminInplannenPage() {
               value={selectedUserId}
               onChange={(e) => setSelectedUserId(e.target.value)}
               required
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all hover:border-gray-400"
             >
               <option value="">Selecteer een medewerker</option>
               {users.map((user) => (
@@ -205,7 +303,7 @@ export default function AdminInplannenPage() {
               onChange={(e) => setDate(e.target.value)}
               required
               min={new Date().toISOString().split('T')[0]}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all hover:border-gray-400"
             />
           </div>
 
@@ -220,7 +318,7 @@ export default function AdminInplannenPage() {
                 value={startTime}
                 onChange={(e) => setStartTime(e.target.value)}
                 required
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all hover:border-gray-400"
               />
             </div>
             <div>
@@ -232,7 +330,7 @@ export default function AdminInplannenPage() {
                 value={endTime}
                 onChange={(e) => setEndTime(e.target.value)}
                 required
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all hover:border-gray-400"
               />
             </div>
           </div>
@@ -245,7 +343,7 @@ export default function AdminInplannenPage() {
             <select
               value={role}
               onChange={(e) => setRole(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all hover:border-gray-400"
             >
               <option value="">Geen rol</option>
               <option value="Bediening">Bediening</option>
@@ -265,7 +363,7 @@ export default function AdminInplannenPage() {
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
               placeholder="Bijv. Horeca dienst, Evenement, etc."
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
+              className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none transition-all hover:border-gray-400"
             />
           </div>
 
@@ -274,14 +372,14 @@ export default function AdminInplannenPage() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="flex-1 bg-blue-600 text-white px-4 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
+              className="flex-1 bg-blue-600 text-white px-4 py-3 rounded-lg hover:bg-blue-700 active:bg-blue-800 transition-all duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base shadow-sm hover:shadow-md"
             >
               {isSubmitting ? 'Bezig met opslaan...' : 'Dienst Inplannen'}
             </button>
             <button
               type="button"
               onClick={() => router.push('/admin')}
-              className="px-4 py-3 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors font-medium text-sm sm:text-base"
+              className="px-4 py-3 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 active:bg-gray-100 transition-all duration-200 font-medium text-sm sm:text-base"
             >
               Annuleren
             </button>
@@ -291,4 +389,20 @@ export default function AdminInplannenPage() {
     </div>
   )
 }
+
+export default function AdminInplannenPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Bezig met laden...</p>
+        </div>
+      </div>
+    }>
+      <AdminInplannenPageContent />
+    </Suspense>
+  )
+}
+
 

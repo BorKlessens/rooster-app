@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useEffect } from 'react';
 import { createAdminAccountIfNeeded } from '@/lib/createAdminAccount';
-import { isAdmin } from '@/lib/supabaseClient';
+import { isAdmin, supabase } from '@/lib/supabaseClient';
+import { verifyPassword } from '@/lib/passwordUtils';
 
 /**
  * Login pagina
@@ -28,7 +29,7 @@ export default function LoginPage() {
     document.documentElement.style.background = 'transparent';
     
     // Zorg ervoor dat admin account bestaat (direct bij mount)
-    createAdminAccountIfNeeded();
+    createAdminAccountIfNeeded().catch(console.error);
     
     return () => {
       document.body.style.overflow = 'unset';
@@ -43,52 +44,126 @@ export default function LoginPage() {
     setError('');
     setIsLoading(true);
 
-    // Simpele demo login (later vervangen door Supabase Auth)
     try {
       // Zorg ervoor dat admin account bestaat voordat we proberen in te loggen
-      createAdminAccountIfNeeded();
+      await createAdminAccountIfNeeded();
       
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Haal opgeslagen gebruikers op
-      const storedUsers = localStorage.getItem('users');
-      const users = storedUsers ? JSON.parse(storedUsers) : [];
-      
-      // Trim username input en zoek gebruiker (case-insensitive)
-      const trimmedUsername = username.trim();
-      
-      // Debug: log alle gebruikers (alleen in development)
-      if (process.env.NODE_ENV === 'development') {
-        console.log('Zoeken naar gebruiker:', trimmedUsername);
-        console.log('Beschikbare gebruikers:', users.map((u: { username: string }) => u.username));
-      }
-      
-      const user = users.find(
-        (u: { username: string; password: string }) => 
-          u.username.toLowerCase().trim() === trimmedUsername.toLowerCase() && u.password === password
-      );
-      
-      if (!user) {
-        // Check of username bestaat maar wachtwoord verkeerd is
-        const userExists = users.find(
-          (u: { username: string }) => u.username.toLowerCase().trim() === trimmedUsername.toLowerCase()
+      const trimmedUsername = username.trim().toLowerCase();
+
+      // Probeer eerst in te loggen via Supabase
+      const { data: users, error: fetchError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('username', trimmedUsername)
+        .limit(1);
+
+      if (fetchError) {
+        console.error('Error fetching user:', fetchError);
+        // Fallback naar localStorage voor backward compatibility
+        const storedUsers = localStorage.getItem('users');
+        const localUsers = storedUsers ? JSON.parse(storedUsers) : [];
+        
+        const user = localUsers.find(
+          (u: { username: string; password: string }) => 
+            u.username.toLowerCase().trim() === trimmedUsername && u.password === password
         );
         
-        if (userExists) {
-          setError('Wachtwoord is onjuist.');
-        } else {
+        if (!user) {
           setError('Gebruikersnaam of wachtwoord is onjuist.');
+          setIsLoading(false);
+          return;
         }
+        
+        // Login succesvol (localStorage fallback)
+        localStorage.setItem('isLoggedIn', 'true');
+        localStorage.setItem('username', user.username);
+        localStorage.setItem('userId', user.id || user.username);
+        
+        const admin = await isAdmin();
+        if (admin) {
+          router.push('/admin');
+        } else {
+          router.push('/home');
+        }
+        return;
+      }
+
+      if (!users || users.length === 0) {
+        // Gebruiker niet gevonden in Supabase, probeer localStorage als fallback
+        const storedUsers = localStorage.getItem('users');
+        const localUsers = storedUsers ? JSON.parse(storedUsers) : [];
+        
+        const user = localUsers.find(
+          (u: { username: string; password: string }) => 
+            u.username.toLowerCase().trim() === trimmedUsername && u.password === password
+        );
+        
+        if (!user) {
+          setError('Gebruikersnaam of wachtwoord is onjuist.');
+          setIsLoading(false);
+          return;
+        }
+        
+        // Login succesvol (localStorage fallback)
+        localStorage.setItem('isLoggedIn', 'true');
+        localStorage.setItem('username', user.username);
+        localStorage.setItem('userId', user.id || user.username);
+        
+        const admin = await isAdmin();
+        if (admin) {
+          router.push('/admin');
+        } else {
+          router.push('/home');
+        }
+        return;
+      }
+
+      const user = users[0];
+
+      // Verifieer wachtwoord
+      if (!user.password_hash) {
+        setError('Account configuratie fout. Neem contact op met de beheerder.');
         setIsLoading(false);
         return;
       }
+
+      const isValidPassword = await verifyPassword(password, user.password_hash);
       
+      if (!isValidPassword) {
+        setError('Wachtwoord is onjuist.');
+        setIsLoading(false);
+        return;
+      }
+
       // Login succesvol
       localStorage.setItem('isLoggedIn', 'true');
       localStorage.setItem('username', user.username);
-      localStorage.setItem('userId', user.id || user.username);
-      
-      // Check of gebruiker admin is en redirect dienovereenkomstig
+      localStorage.setItem('userId', user.id);
+
+      // Sla ook lokaal op voor backward compatibility
+      const storedUsers = localStorage.getItem('users');
+      const usersArray = storedUsers ? JSON.parse(storedUsers) : [];
+      const existingUserIndex = usersArray.findIndex((u: { id: string }) => u.id === user.id);
+      if (existingUserIndex === -1) {
+        usersArray.push({
+          id: user.id,
+          username: user.username,
+          fullName: user.full_name,
+          role: user.role,
+        });
+        localStorage.setItem('users', JSON.stringify(usersArray));
+      } else {
+        // Update bestaande gebruiker
+        usersArray[existingUserIndex] = {
+          id: user.id,
+          username: user.username,
+          fullName: user.full_name,
+          role: user.role,
+        };
+        localStorage.setItem('users', JSON.stringify(usersArray));
+      }
+
+      // Check of gebruiker admin is
       const admin = await isAdmin();
       if (admin) {
         router.push('/admin');
@@ -168,7 +243,7 @@ export default function LoginPage() {
             </div>
             
             {error && (
-              <div className="bg-red-50 border-2 border-red-200 text-red-700 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm animate-shake">
+              <div className="bg-red-50 border border-red-200 text-red-700 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm animate-shake shadow-sm">
                 {error}
               </div>
             )}
@@ -176,7 +251,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold py-3 sm:py-4 px-4 sm:px-6 rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:shadow-lg mt-2 animate-slide-in-left text-sm sm:text-base"
+              className="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold py-3 sm:py-4 px-4 sm:px-6 rounded-xl transition-all duration-200 shadow-md hover:shadow-lg active:shadow-md hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:shadow-md mt-2 animate-slide-in-left text-sm sm:text-base"
               style={{ fontFamily: 'var(--font-geist-sans)', animationDelay: '0.3s' }}
             >
               <span className="relative">

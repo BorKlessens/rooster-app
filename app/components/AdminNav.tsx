@@ -17,6 +17,7 @@ export default function AdminNav() {
 
   const menuItems = [
     { href: '/admin', label: 'Dashboard', icon: 'dashboard' },
+    { href: '/admin/leden', label: 'Ledenlijst', icon: 'members' },
     { href: '/admin/beschikbaarheid', label: 'Beschikbaarheid', icon: 'availability' },
     { href: '/admin/inplannen', label: 'Inplannen', icon: 'planning' },
   ]
@@ -35,11 +36,11 @@ export default function AdminNav() {
       {/* Hamburger menu button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="fixed top-4 left-4 z-50 p-2 rounded-lg bg-white shadow-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+        className="fixed top-4 left-4 z-50 p-2 rounded-lg bg-white shadow-md border border-gray-200 hover:bg-gray-50 active:bg-gray-100 transition-all duration-200 hover:shadow-lg"
         aria-label="Menu"
       >
         <svg
-          className="w-6 h-6 text-gray-700"
+          className="w-6 h-6 text-blue-900"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -64,7 +65,7 @@ export default function AdminNav() {
       {/* Sidebar menu */}
       <div
         className={`
-          fixed top-0 left-0 h-full w-64 bg-white shadow-xl z-40 transform transition-transform duration-300 ease-in-out
+          fixed top-0 left-0 h-full w-64 bg-white shadow-lg z-40 transform transition-transform duration-300 ease-in-out
           ${isOpen ? 'translate-x-0' : '-translate-x-full'}
         `}
       >
@@ -83,10 +84,10 @@ export default function AdminNav() {
                     href={item.href}
                     onClick={() => setIsOpen(false)}
                     className={`
-                      flex items-center gap-3 px-4 py-3 rounded-lg transition-colors
+                      flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200
                       ${isActive(item.href)
-                        ? 'bg-blue-600 text-white'
-                        : 'text-gray-700 hover:bg-gray-100'
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'text-gray-700 hover:bg-gray-100 active:bg-gray-200'
                       }
                     `}
                   >
@@ -102,7 +103,7 @@ export default function AdminNav() {
           <div className="p-4 border-t border-gray-200">
             <button
               onClick={handleLogout}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-red-600 hover:bg-red-50 transition-colors font-medium"
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-red-600 hover:bg-red-50 active:bg-red-100 transition-all duration-200 font-medium"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15M12 9l-3 3m0 0 3 3m-3-3h12.75" />
@@ -139,6 +140,12 @@ function getIcon(name: string) {
       return (
         <svg className={iconClass} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+        </svg>
+      )
+    case 'members':
+      return (
+        <svg className={iconClass} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
         </svg>
       )
     default:
