@@ -50,91 +50,39 @@ export default function Navigation() {
 
     const navElement = navRef.current;
 
-    // Forceer fixed positioning op mobiel
+    // Forceer fixed positioning op mobiel - eenvoudige versie die alleen nodig is bij resize
     const enforceFixedPosition = () => {
       if (window.innerWidth <= 768 && navElement) {
-        // Verwijder alle transform properties die kunnen interfereren
+        // Verwijder alle properties die kunnen interfereren
         navElement.style.removeProperty('top');
         navElement.style.removeProperty('margin-top');
         navElement.style.removeProperty('margin-bottom');
         
-        // Forceer navbar positie met inline styles - gebruik directe style assignment
-        navElement.style.position = 'fixed';
-        navElement.style.bottom = '0';
-        navElement.style.left = '0';
-        navElement.style.right = '0';
-        navElement.style.width = '100%';
-        navElement.style.zIndex = '9999';
-        navElement.style.transform = 'translateZ(0)';
-        navElement.style.webkitTransform = 'translateZ(0)';
-        navElement.style.willChange = 'transform';
-        navElement.style.backfaceVisibility = 'hidden';
-        navElement.style.webkitBackfaceVisibility = 'hidden';
-        
-        // Forceer ook met setProperty voor extra zekerheid
+        // Forceer fixed positioning
         navElement.style.setProperty('position', 'fixed', 'important');
         navElement.style.setProperty('bottom', '0', 'important');
         navElement.style.setProperty('left', '0', 'important');
         navElement.style.setProperty('right', '0', 'important');
         navElement.style.setProperty('width', '100%', 'important');
         navElement.style.setProperty('z-index', '9999', 'important');
+      } else if (window.innerWidth > 768 && navElement) {
+        // Op desktop, reset naar relative
+        navElement.style.removeProperty('position');
+        navElement.style.removeProperty('bottom');
+        navElement.style.removeProperty('left');
+        navElement.style.removeProperty('right');
+        navElement.style.removeProperty('width');
       }
     };
 
-    // Zet positie direct
+    // Zet positie direct bij mount
     enforceFixedPosition();
 
-    // Herhaal bij scroll, resize en touch events
-    const handleScroll = () => {
-      if (window.innerWidth <= 768) {
-        enforceFixedPosition();
-      }
-    };
-
-    // Gebruik requestAnimationFrame voor betere performance
-    let rafId: number;
-    const handleScrollRAF = () => {
-      if (rafId) cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(() => {
-        handleScroll();
-      });
-    };
-
-    // Voeg event listeners toe
-    window.addEventListener('scroll', handleScrollRAF, { passive: true, capture: true });
+    // Herhaal alleen bij resize
     window.addEventListener('resize', enforceFixedPosition);
-    window.addEventListener('touchmove', handleScrollRAF, { passive: true, capture: true });
-    window.addEventListener('touchstart', enforceFixedPosition, { passive: true });
-    window.addEventListener('touchend', enforceFixedPosition, { passive: true });
-
-    // Check continu of de positie nog correct is
-    const interval = setInterval(() => {
-      if (window.innerWidth <= 768 && navElement) {
-        const computed = window.getComputedStyle(navElement);
-        const rect = navElement.getBoundingClientRect();
-        const viewportHeight = window.innerHeight;
-        const scrollY = window.scrollY || window.pageYOffset;
-        
-        // Check of positie niet fixed is of niet onderaan staat
-        if (computed.position !== 'fixed' || Math.abs(rect.bottom - viewportHeight) > 1) {
-          enforceFixedPosition();
-        }
-        
-        // Forceer ook de positie als er gescrolled is
-        if (scrollY > 0) {
-          enforceFixedPosition();
-        }
-      }
-    }, 50);
 
     return () => {
-      if (rafId) cancelAnimationFrame(rafId);
-      window.removeEventListener('scroll', handleScrollRAF, { capture: true } as any);
       window.removeEventListener('resize', enforceFixedPosition);
-      window.removeEventListener('touchmove', handleScrollRAF, { capture: true } as any);
-      window.removeEventListener('touchstart', enforceFixedPosition);
-      window.removeEventListener('touchend', enforceFixedPosition);
-      clearInterval(interval);
     };
   }, [pathname]);
 
@@ -200,9 +148,7 @@ export default function Navigation() {
         zIndex: 9999,
       }}
     >
-      <div className={`w-full md:max-w-7xl md:mx-auto bg-white rounded-t-2xl md:rounded-2xl shadow-md border-t md:border border-gray-200 px-2 sm:px-4 hover:shadow-lg transition-all duration-300 ${
-        menuOpen ? 'translate-y-full md:translate-y-0' : 'translate-y-0'
-      }`}>
+      <div className="w-full md:max-w-7xl md:mx-auto bg-white rounded-t-2xl md:rounded-2xl shadow-md border-t md:border border-gray-200 px-2 sm:px-4 hover:shadow-lg transition-all duration-300">
         <div className="flex justify-around items-center h-16 gap-1">
           <BottomNavLink href="/home" isActive={isActive('/home')} iconName="home">
             Home

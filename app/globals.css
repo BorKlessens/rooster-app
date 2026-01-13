@@ -49,6 +49,8 @@ body {
     /* Zorg ervoor dat scrollen alleen op de body gebeurt */
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+    /* Voorkom dat body transform de navbar beïnvloedt */
+    transform: none !important;
   }
   
   /* Forceer fixed positioning voor de navbar op mobiel */
@@ -70,11 +72,19 @@ body {
     top: auto !important;
     /* Forceer een nieuwe stacking context */
     isolation: isolate;
+    /* Voorkom dat de navbar meescrollt */
+    position: fixed !important;
   }
   
   /* Voorkom dat parent elementen de navbar beïnvloeden */
-  body > nav#bottom-navigation {
+  body > nav#bottom-navigation,
+  #__next > nav#bottom-navigation,
+  [data-nextjs-scroll-focus-boundary] > nav#bottom-navigation {
     position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    transform: translateZ(0) !important;
   }
   
   /* Zorg ervoor dat parent containers de navbar niet beïnvloeden */
@@ -84,11 +94,7 @@ body {
   }
   
   /* Voorkom dat transform op parent containers de navbar beïnvloedt */
-  body > * {
+  body > *:not(nav#bottom-navigation) {
     transform: none !important;
-  }
-  
-  body > nav#bottom-navigation {
-    transform: translateZ(0) !important;
   }
 }

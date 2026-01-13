@@ -19,6 +19,7 @@ interface AvailabilityRecord {
   date: string
   status: string | null
   time_slots: string[]
+  message: string | null
   locked: boolean
   created_at: string
   updated_at: string
@@ -30,7 +31,13 @@ export default function AdminAvailabilityPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [isAdminUser, setIsAdminUser] = useState(false)
   const [availability, setAvailability] = useState<AvailabilityRecord[]>([])
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const today = new Date()
+    const year = today.getFullYear()
+    const month = String(today.getMonth() + 1).padStart(2, '0')
+    const day = String(today.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  })
   const [filterUsername, setFilterUsername] = useState('')
 
   useEffect(() => {
@@ -85,6 +92,18 @@ export default function AdminAvailabilityPage() {
         console.error('Error loading availability:', error)
         setAvailability([])
       } else {
+        console.log('Loaded availability data:', data)
+        console.log('Selected date:', selectedDate)
+        console.log('Selected date as Date object:', new Date(selectedDate))
+        // Log each item to see if message is present
+        if (data) {
+          data.forEach((item: AvailabilityRecord) => {
+            console.log(`User: ${item.username}, Date in DB: ${item.date}, Message:`, item.message)
+            console.log(`  Date comparison: DB="${item.date}" vs Selected="${selectedDate}"`, item.date === selectedDate)
+            console.log(`  Message type:`, typeof item.message, `Message value:`, JSON.stringify(item.message))
+            console.log(`  Full item:`, JSON.stringify(item, null, 2))
+          })
+        }
         setAvailability(data || [])
       }
     } catch (error) {
@@ -102,6 +121,16 @@ export default function AdminAvailabilityPage() {
       evening: 'Avond'
     }
     return labels[slot] || slot
+  }
+
+  /**
+   * Formatteer datum naar YYYY-MM-DD string (zonder tijdzone problemen)
+   */
+  const formatDateToString = (date: Date): string => {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
   }
 
   const formatDate = (dateString: string): string => {
@@ -214,6 +243,12 @@ export default function AdminAvailabilityPage() {
                       </button>
                     </div>
                     <div className="space-y-1.5 sm:space-y-2 text-xs sm:text-sm">
+                      {/* Debug info - tijdelijk */}
+                      {process.env.NODE_ENV === 'development' && (
+                        <div className="text-xs text-gray-400 italic">
+                          Debug: message = {item.message ? `"${item.message}"` : 'null/undefined'}
+                        </div>
+                      )}
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium text-gray-700">Status:</span>
                         <span className={item.status === 'available' ? 'text-green-600 font-semibold' : 'text-gray-500'}>
@@ -241,6 +276,19 @@ export default function AdminAvailabilityPage() {
                           {item.locked ? 'Ja' : 'Nee'}
                         </span>
                       </div>
+                      {item.message && item.message.trim() && (
+                        <div className="mt-2 p-2.5 bg-blue-50 border border-blue-200 rounded-lg">
+                          <div className="flex items-start gap-2">
+                            <svg className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+                            </svg>
+                            <div className="flex-1 min-w-0">
+                              <span className="text-xs font-semibold text-blue-700 block mb-1">Bijzonderheden:</span>
+                              <p className="text-xs sm:text-sm text-blue-900 whitespace-pre-wrap break-words">{item.message}</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                       <div className="text-xs text-gray-400 pt-1.5 sm:pt-2 border-t border-gray-100">
                         Laatst bijgewerkt: {new Date(item.updated_at).toLocaleString('nl-NL')}
                       </div>

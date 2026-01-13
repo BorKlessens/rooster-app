@@ -20,6 +20,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [focusedField, setFocusedField] = useState<string | null>(null);
 
   // Voorkom scrollen en verwijder witte achtergrond op deze pagina
   useEffect(() => {
@@ -198,48 +199,62 @@ export default function LoginPage() {
         {/* Formulier op witte gedeelte */}
         <div className="w-full max-w-md animate-fade-in-up">
           <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
-            <div className="animate-slide-in-left" style={{ animationDelay: '0.1s' }}>
-              <label 
-                htmlFor="username" 
-                className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2 transition-colors duration-200"
-                style={{ fontFamily: 'var(--font-geist-sans)' }}
-              >
-                Gebruikersnaam
-              </label>
-              <input
-                id="username"
-                name="username"
-                type="text"
-                autoComplete="username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-                className="w-full px-3 sm:px-4 py-2.5 sm:py-3.5 text-sm sm:text-base bg-white border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all duration-300 shadow-sm hover:shadow-md hover:border-gray-400 hover:scale-[1.02] active:scale-[0.98]"
-                placeholder="jouw gebruikersnaam"
-                style={{ fontFamily: 'var(--font-geist-sans)' }}
-              />
+            <div className="animate-slide-in-left relative" style={{ animationDelay: '0.1s' }}>
+              <div className="relative">
+                <input
+                  id="username"
+                  name="username"
+                  type="text"
+                  autoComplete="username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  onFocus={() => setFocusedField('username')}
+                  onBlur={() => setFocusedField(null)}
+                  required
+                  className="w-full px-3 sm:px-4 pt-6 sm:pt-7 pb-2.5 sm:pb-3.5 text-sm sm:text-base bg-white border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all duration-300 shadow-sm hover:shadow-md hover:border-gray-400 hover:scale-[1.02] active:scale-[0.98]"
+                  style={{ fontFamily: 'var(--font-geist-sans)' }}
+                />
+                <label 
+                  htmlFor="username" 
+                  className={`absolute left-3 sm:left-4 pointer-events-none transition-all duration-300 ${
+                    username || focusedField === 'username' 
+                      ? 'top-1.5 sm:top-2 text-xs sm:text-xs font-medium text-gray-700' 
+                      : 'top-2.5 sm:top-3.5 text-sm sm:text-base text-gray-500'
+                  }`}
+                  style={{ fontFamily: 'var(--font-geist-sans)' }}
+                >
+                  Gebruikersnaam
+                </label>
+              </div>
             </div>
             
-            <div className="animate-slide-in-left" style={{ animationDelay: '0.2s' }}>
-              <label 
-                htmlFor="password" 
-                className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2 transition-colors duration-200"
-                style={{ fontFamily: 'var(--font-geist-sans)' }}
-              >
-                Wachtwoord
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="w-full px-3 sm:px-4 py-2.5 sm:py-3.5 text-sm sm:text-base bg-white border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all duration-300 shadow-sm hover:shadow-md hover:border-gray-400 hover:scale-[1.02] active:scale-[0.98]"
-                placeholder="••••••••"
-                style={{ fontFamily: 'var(--font-geist-sans)' }}
-              />
+            <div className="animate-slide-in-left relative" style={{ animationDelay: '0.2s' }}>
+              <div className="relative">
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onFocus={() => setFocusedField('password')}
+                  onBlur={() => setFocusedField(null)}
+                  required
+                  className="w-full px-3 sm:px-4 pt-6 sm:pt-7 pb-2.5 sm:pb-3.5 text-sm sm:text-base bg-white border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all duration-300 shadow-sm hover:shadow-md hover:border-gray-400 hover:scale-[1.02] active:scale-[0.98]"
+                  style={{ fontFamily: 'var(--font-geist-sans)' }}
+                />
+                <label 
+                  htmlFor="password" 
+                  className={`absolute left-3 sm:left-4 pointer-events-none transition-all duration-300 ${
+                    password || focusedField === 'password' 
+                      ? 'top-1.5 sm:top-2 text-xs sm:text-xs font-medium text-gray-700' 
+                      : 'top-2.5 sm:top-3.5 text-sm sm:text-base text-gray-500'
+                  }`}
+                  style={{ fontFamily: 'var(--font-geist-sans)' }}
+                >
+                  Wachtwoord
+                </label>
+              </div>
             </div>
             
             {error && (
@@ -247,6 +262,19 @@ export default function LoginPage() {
                 {error}
               </div>
             )}
+
+            {/* Test credentials voor docenten */}
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-xs sm:text-sm shadow-sm">
+              <div className="font-semibold text-blue-900 mb-2">Test accounts voor docenten:</div>
+              <div className="space-y-1.5 text-blue-800">
+                <div>
+                  <span className="font-medium">Gebruikersaccount:</span> Jan Jansen / <span className="font-mono">Jan123</span>
+                </div>
+                <div>
+                  <span className="font-medium">Admin account:</span> Admin / <span className="font-mono">admin</span>
+                </div>
+              </div>
+            </div>
           
             <button
               type="submit"

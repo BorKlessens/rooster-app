@@ -22,3 +22,5 @@ COMMENT ON COLUMN public.users.email IS 'Email adres van de medewerker';
 COMMENT ON COLUMN public.users.phone IS 'Telefoonnummer van de medewerker';
 COMMENT ON COLUMN public.users.birthday IS 'Verjaardag van de medewerker';
 
+
+

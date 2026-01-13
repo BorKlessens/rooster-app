@@ -35,6 +35,7 @@ interface DayAvailability {
   status: AvailabilityStatus;
   timeSlots: TimeSlot[];
   locked: boolean;
+  message?: string | null;
 }
 
 export default function AvailabilityPage() {
@@ -52,6 +53,9 @@ export default function AvailabilityPage() {
   
   // State voor welke dag uitgeklapt is (timeSlots zichtbaar)
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
+  
+  // State voor berichten per dag (dateString -> message)
+  const [dayMessages, setDayMessages] = useState<Map<string, string>>(new Map());
 
   useEffect(() => {
     // Check of gebruiker ingelogd is
@@ -101,25 +105,32 @@ export default function AvailabilityPage() {
     if (!userId) return;
 
     const weekDays: DayAvailability[] = [];
-    const start = new Date(currentWeekStart);
+    // Maak een kopie van currentWeekStart en reset naar middernacht in lokale tijd
+    const baseDate = new Date(currentWeekStart);
+    baseDate.setHours(0, 0, 0, 0);
     
     // Begin op maandag (of eerste dag van de week)
-    const dayOfWeek = start.getDay();
-    const diff = start.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // Maandag als eerste dag
+    const dayOfWeek = baseDate.getDay();
+    const diff = baseDate.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // Maandag als eerste dag
+    
+    // Maak start datum direct met lokale componenten om tijdzone problemen te voorkomen
+    // Gebruik setDate in plaats van constructor om maandgrens problemen te voorkomen
+    const start = new Date(baseDate);
     start.setDate(diff);
     start.setHours(0, 0, 0, 0);
     
-    // Bereken week eind
+    // Bereken week eind - gebruik setDate om maandgrens correct te handelen
     const weekEnd = new Date(start);
     weekEnd.setDate(start.getDate() + 6);
+    weekEnd.setHours(0, 0, 0, 0);
 
     // Haal beschikbaarheid op uit database
     const { data: availabilityData, error } = await supabase
       .from('availability')
       .select('*')
       .eq('user_id', userId)
-      .gte('date', start.toISOString().split('T')[0])
-      .lte('date', weekEnd.toISOString().split('T')[0]);
+      .gte('date', formatDateToString(start))
+      .lte('date', formatDateToString(weekEnd));
 
     if (error) {
       console.error('Error loading availability:', error);
@@ -127,9 +138,12 @@ export default function AvailabilityPage() {
 
     // Genereer 7 dagen (maandag t/m zondag)
     for (let i = 0; i < 7; i++) {
+      // Maak datum door dagen toe te voegen aan start datum
+      // Gebruik setDate om maandgrens correct te handelen
       const date = new Date(start);
       date.setDate(start.getDate() + i);
-      const dateString = date.toISOString().split('T')[0];
+      date.setHours(0, 0, 0, 0);
+      const dateString = formatDateToString(date);
       
       // Zoek bijbehorende beschikbaarheid
       const dayAvailability = availabilityData?.find(
@@ -141,10 +155,30 @@ export default function AvailabilityPage() {
         status: dayAvailability?.status || null,
         timeSlots: (dayAvailability?.time_slots as TimeSlot[]) || [],
         locked: dayAvailability?.locked || false,
+        message: dayAvailability?.message || null,
       });
+      
+      // Voeg bericht toe aan state
+      if (dayAvailability?.message) {
+        setDayMessages(prev => {
+          const newMap = new Map(prev);
+          newMap.set(dateString, dayAvailability.message);
+          return newMap;
+        });
+      }
     }
     
     setDays(weekDays);
+  };
+
+  /**
+   * Formatteer datum naar YYYY-MM-DD string (zonder tijdzone problemen)
+   */
+  const formatDateToString = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
 
   /**
@@ -199,16 +233,34 @@ export default function AvailabilityPage() {
             setExpandedDay(null);
           }
           
+          const dateString = formatDateToString(date);
+          const currentMessage = dayMessages.get(dateString) || day.message || '';
+          
+          // Debug logging - alleen in development
+          if (process.env.NODE_ENV === 'development') {
+            console.log('Saving availability:', {
+              dateString,
+              dateObject: date,
+              localDate: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`,
+              isoString: date.toISOString(),
+              timezoneOffset: date.getTimezoneOffset(),
+              month: date.getMonth(),
+              day: date.getDate(),
+              year: date.getFullYear()
+            });
+          }
+          
           // Opslaan in database
           supabase
             .from('availability')
             .upsert({
               user_id: userId,
               username: username,
-              date: date.toISOString().split('T')[0],
+              date: dateString,
               status: newStatus,
               time_slots: newTimeSlots,
               locked: day.locked,
+              message: currentMessage.trim() || null,
             }, {
               onConflict: 'user_id,date'
             })
@@ -219,7 +271,7 @@ export default function AvailabilityPage() {
               }
             });
           
-          return { ...day, status: newStatus, timeSlots: newTimeSlots };
+          return { ...day, status: newStatus, timeSlots: newTimeSlots, message: currentMessage || null };
         }
         return day;
       })
@@ -257,16 +309,20 @@ export default function AvailabilityPage() {
             setExpandedDay(null);
           }
           
+          const dateString = formatDateToString(date);
+          const currentMessage = dayMessages.get(dateString) || day.message || '';
+          
           // Opslaan in database
           supabase
             .from('availability')
             .upsert({
               user_id: userId,
               username: username,
-              date: date.toISOString().split('T')[0],
+              date: dateString,
               status: day.status,
               time_slots: day.timeSlots,
               locked: newLocked,
+              message: currentMessage.trim() || null,
             }, {
               onConflict: 'user_id,date'
             })
@@ -281,6 +337,81 @@ export default function AvailabilityPage() {
         return day;
       })
     );
+  };
+
+  /**
+   * Sla bericht op voor een specifieke dag
+   */
+  const saveMessage = async (date: Date, message: string) => {
+    const userId = getCurrentUserId();
+    const username = localStorage.getItem('username');
+    if (!userId || !username) return;
+
+    const dateString = formatDateToString(date);
+    
+    // Haal de dag op uit de huidige state voordat we updaten
+    const currentDay = days.find(d => formatDateToString(d.date) === dateString);
+    if (!currentDay) {
+      console.warn('Day not found for date:', dateString);
+      return;
+    }
+
+    // Update local state
+    setDayMessages(prev => {
+      const newMap = new Map(prev);
+      newMap.set(dateString, message);
+      return newMap;
+    });
+
+    // Update days state
+    setDays(prevDays =>
+      prevDays.map(day => {
+        if (formatDateToString(day.date) === dateString) {
+          return { ...day, message: message.trim() || null };
+        }
+        return day;
+      })
+    );
+
+    // Opslaan in database
+    try {
+      console.log('Saving message:', {
+        dateString,
+        message: message.trim() || null,
+        currentDay: currentDay ? {
+          status: currentDay.status,
+          timeSlots: currentDay.timeSlots,
+          locked: currentDay.locked
+        } : 'not found'
+      });
+      
+      const { error, data } = await supabase
+        .from('availability')
+        .upsert({
+          user_id: userId,
+          username: username,
+          date: dateString,
+          status: currentDay.status,
+          time_slots: currentDay.timeSlots,
+          locked: currentDay.locked,
+          message: message.trim() || null,
+        }, {
+          onConflict: 'user_id,date'
+        });
+
+      if (error) {
+        console.error('Error saving message:', error);
+        console.error('Error code:', error.code);
+        console.error('Error message:', error.message);
+        console.error('Error details:', error.details);
+        console.error('Error hint:', error.hint);
+        // Optioneel: toon error message aan gebruiker
+      } else {
+        console.log('Message saved successfully:', data);
+      }
+    } catch (err) {
+      console.error('Unexpected error saving message:', err);
+    }
   };
 
   /**
@@ -589,6 +720,36 @@ export default function AvailabilityPage() {
                         );
                       })}
                     </div>
+                    
+                    {/* Berichtveld */}
+                    <div className="mt-4">
+                      <label className="block text-xs font-medium mb-2 text-gray-700">
+                        Bijzonderheden (optioneel)
+                      </label>
+                      <textarea
+                        value={dayMessages.get(formatDateToString(day.date)) || day.message || ''}
+                        onChange={(e) => {
+                          const dateString = formatDateToString(day.date);
+                          setDayMessages(prev => {
+                            const newMap = new Map(prev);
+                            newMap.set(dateString, e.target.value);
+                            return newMap;
+                          });
+                        }}
+                        onBlur={(e) => saveMessage(day.date, e.target.value)}
+                        placeholder="Bijv. Ik kan maar tot 20:00"
+                        className={`w-full px-3 py-2 border-2 rounded-lg focus:ring-2 outline-none transition-all duration-200 resize-none text-sm ${
+                          day.status === 'available' 
+                            ? 'border-green-300 focus:border-green-500 focus:ring-green-200' 
+                            : 'border-gray-300 focus:border-blue-500 focus:ring-blue-200'
+                        }`}
+                        rows={2}
+                        maxLength={500}
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        {(dayMessages.get(formatDateToString(day.date)) || day.message || '').length}/500 karakters
+                      </p>
+                    </div>
                   </div>
                 )}
                 
@@ -631,6 +792,19 @@ export default function AvailabilityPage() {
                         </div>
                       ))}
                     </div>
+                    {day.message && (
+                      <div className="mt-3 p-2.5 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div className="flex items-start gap-2">
+                          <svg className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+                          </svg>
+                          <div className="flex-1 min-w-0">
+                            <span className="text-xs font-semibold text-blue-700 block mb-1">Bijzonderheden:</span>
+                            <p className="text-xs sm:text-sm text-blue-900 whitespace-pre-wrap break-words">{day.message}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

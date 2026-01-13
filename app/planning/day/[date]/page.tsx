@@ -101,7 +101,7 @@ function DayDetailContent() {
             </svg>
             <span className="text-sm font-medium">Terug</span>
           </button>
-          <div className="bg-white rounded-xl shadow-sm border-2 border-red-200 p-6 text-center">
+          <div className="bg-white rounded-xl shadow-md border-2 border-red-200 p-6 text-center">
             <p className="text-red-600">{error}</p>
           </div>
         </div>
@@ -144,7 +144,7 @@ function DayDetailContent() {
               return (
                 <div
                   key={shift.id}
-                  className={`rounded-xl shadow-sm border-2 p-4 sm:p-6 transition-colors ${
+                  className={`rounded-xl shadow-lg border-2 p-4 sm:p-6 transition-all duration-200 hover:shadow-xl ${
                     isMyShift
                       ? 'bg-green-50 border-green-400 hover:border-green-500'
                       : 'bg-white border-blue-200 hover:border-blue-300'
@@ -209,7 +209,7 @@ function DayDetailContent() {
             })}
           </div>
         ) : (
-          <div className="bg-white rounded-xl shadow-sm border-2 border-blue-200 p-8 sm:p-12 text-center">
+          <div className="bg-white rounded-xl shadow-md border-2 border-blue-200 p-8 sm:p-12 text-center hover:shadow-lg transition-shadow">
             <svg
               className="w-16 h-16 text-blue-300 mx-auto mb-4"
               fill="none"

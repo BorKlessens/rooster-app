@@ -40,6 +40,17 @@ interface DayWithShifts {
   shifts: Shift[];
 }
 
+// Type definitie voor tijdstippen
+type TimeSlot = 'morning' | 'afternoon' | 'evening';
+
+// Type definitie voor beschikbaarheid
+interface Availability {
+  status: 'available' | null;
+  time_slots: TimeSlot[];
+  locked: boolean;
+  message?: string | null;
+}
+
 // Mock data - later vervangen door Supabase query
 const generateMockShifts = (): Map<string, Shift[]> => {
   const shifts = new Map<string, Shift[]>();
@@ -101,6 +112,12 @@ export default function PlanningPage() {
   
   // Mock data voor diensten
   const [shiftsData, setShiftsData] = useState<Map<string, Shift[]>>(new Map());
+  
+  // State voor beschikbaarheid van geselecteerde dag
+  const [selectedDayAvailability, setSelectedDayAvailability] = useState<Availability | null>(null);
+  const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
+  const [selectedTimeSlots, setSelectedTimeSlots] = useState<TimeSlot[]>([]);
+  const [availabilityMessage, setAvailabilityMessage] = useState<string>('');
 
   useEffect(() => {
     // Check of gebruiker ingelogd is
@@ -209,15 +226,33 @@ export default function PlanningPage() {
           if (!shiftsMap.has(dateString)) {
             shiftsMap.set(dateString, []);
           }
-          shiftsMap.get(dateString)!.push({
-            id: shift.id,
-            user_id: shift.user_id,
-            username: shift.username,
-            startTime: formatTimeFromDB(shift.start_time),
-            endTime: formatTimeFromDB(shift.end_time),
-            role: shift.role || undefined,
-            description: shift.description || undefined,
-          });
+          
+          const formattedStartTime = formatTimeFromDB(shift.start_time);
+          const formattedEndTime = formatTimeFromDB(shift.end_time);
+          
+          // Check of deze shift al bestaat (op basis van user_id, date, start_time, end_time)
+          const existingShifts = shiftsMap.get(dateString)!;
+          const isDuplicate = existingShifts.some(
+            (existingShift) =>
+              existingShift.user_id === shift.user_id &&
+              existingShift.startTime === formattedStartTime &&
+              existingShift.endTime === formattedEndTime
+          );
+          
+          // Voeg alleen toe als het geen duplicaat is
+          if (!isDuplicate) {
+            shiftsMap.get(dateString)!.push({
+              id: shift.id,
+              user_id: shift.user_id,
+              username: shift.username,
+              startTime: formattedStartTime,
+              endTime: formattedEndTime,
+              role: shift.role || undefined,
+              description: shift.description || undefined,
+            });
+          } else {
+            console.warn(`Duplicate shift detected for ${shift.username} on ${dateString} (${formattedStartTime} - ${formattedEndTime})`);
+          }
         });
       }
 
@@ -314,6 +349,125 @@ export default function PlanningPage() {
   };
 
   /**
+   * Haal beschikbaarheid op voor een specifieke dag
+   */
+  const loadAvailabilityForDay = async (date: Date) => {
+    const userId = getCurrentUserId();
+    if (!userId) {
+      setSelectedDayAvailability(null);
+      return;
+    }
+
+    const dateString = formatDateToString(date);
+    
+    try {
+      const { data, error } = await supabase
+        .from('availability')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('date', dateString)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+        console.error('Error loading availability:', error);
+        setSelectedDayAvailability(null);
+        return;
+      }
+
+      if (data) {
+        setSelectedDayAvailability({
+          status: data.status,
+          time_slots: (data.time_slots as TimeSlot[]) || [],
+          locked: data.locked || false,
+          message: data.message || null,
+        });
+        setSelectedTimeSlots((data.time_slots as TimeSlot[]) || []);
+        setAvailabilityMessage(data.message || '');
+      } else {
+        setSelectedDayAvailability(null);
+        setSelectedTimeSlots([]);
+        setAvailabilityMessage('');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      setSelectedDayAvailability(null);
+    }
+  };
+
+  /**
+   * Sla beschikbaarheid op voor de geselecteerde dag
+   */
+  const saveAvailability = async () => {
+    if (!selectedDay) return;
+    
+    const userId = getCurrentUserId();
+    const username = localStorage.getItem('username');
+    if (!userId || !username) return;
+
+    const dateString = formatDateToString(selectedDay);
+    const status: 'available' | null = selectedTimeSlots.length > 0 ? 'available' : null;
+
+    try {
+      const { error } = await supabase
+        .from('availability')
+        .upsert({
+          user_id: userId,
+          username: username,
+          date: dateString,
+          status: status,
+          time_slots: selectedTimeSlots,
+          locked: false,
+          message: availabilityMessage.trim() || null,
+        }, {
+          onConflict: 'user_id,date'
+        });
+
+      if (error) {
+        console.error('Error saving availability:', error);
+        alert('Er is iets misgegaan bij het opslaan van je beschikbaarheid.');
+        return;
+      }
+
+      // Update local state
+      setSelectedDayAvailability({
+        status,
+        time_slots: selectedTimeSlots,
+        locked: false,
+        message: availabilityMessage.trim() || null,
+      });
+      setShowAvailabilityModal(false);
+    } catch (error) {
+      console.error('Error:', error);
+      alert('Er is iets misgegaan bij het opslaan van je beschikbaarheid.');
+    }
+  };
+
+  /**
+   * Toggle een tijdstip in de selectie
+   */
+  const toggleTimeSlot = (timeSlot: TimeSlot) => {
+    setSelectedTimeSlots(prev => 
+      prev.includes(timeSlot)
+        ? prev.filter(ts => ts !== timeSlot)
+        : [...prev, timeSlot]
+    );
+  };
+
+  /**
+   * Get label voor tijdstip
+   */
+  const getTimeSlotLabel = (timeSlot: TimeSlot): string => {
+    switch (timeSlot) {
+      case 'morning':
+        return 'Ochtend';
+      case 'afternoon':
+        return 'Middag';
+      case 'evening':
+        return 'Avond';
+    }
+  };
+
+  /**
    * Formatteer datum voor weergave
    */
   const formatDate = (date: Date): string => {
@@ -367,6 +521,14 @@ export default function PlanningPage() {
    * Weekdag namen (maandag t/m zondag)
    */
   const weekDays = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
+
+  // Laad beschikbaarheid wanneer een dag wordt geselecteerd
+  useEffect(() => {
+    if (selectedDay) {
+      loadAvailabilityForDay(selectedDay);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDay]);
 
   // Loading state
   if (isLoading) {
@@ -429,7 +591,7 @@ export default function PlanningPage() {
                     const today = new Date();
                     setSelectedDay(today);
                   }}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs sm:text-sm font-medium rounded-lg transition-all duration-200 shadow-sm hover:shadow-md"
+                  className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs sm:text-sm font-medium rounded-lg transition-all duration-200 shadow-md hover:shadow-lg"
                   title="Ga naar vandaag"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -448,7 +610,7 @@ export default function PlanningPage() {
                   prevDay.setDate(prevDay.getDate() - 1);
                   setSelectedDay(prevDay);
                 }}
-                className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-blue-100 hover:bg-blue-200 active:bg-blue-300 text-blue-900 transition-all duration-200 flex-shrink-0 shadow-sm hover:shadow-md"
+                className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-blue-100 hover:bg-blue-200 active:bg-blue-300 text-blue-900 transition-all duration-200 flex-shrink-0 shadow-md hover:shadow-lg"
                 aria-label="Vorige dag"
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -460,6 +622,11 @@ export default function PlanningPage() {
                 <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-900 mb-2 break-words">
                   {formatDate(selectedDay)}
                 </h1>
+                {isToday(selectedDay) && (
+                  <p className="text-xs sm:text-sm font-medium text-blue-600 mb-1">
+                    Vandaag
+                  </p>
+                )}
                 <p className="text-xs sm:text-sm text-blue-900">
                   {sortedShifts.length > 0 
                     ? `${sortedShifts.length} ${sortedShifts.length === 1 ? 'medewerker' : 'medewerkers'} ingepland`
@@ -473,7 +640,7 @@ export default function PlanningPage() {
                   nextDay.setDate(nextDay.getDate() + 1);
                   setSelectedDay(nextDay);
                 }}
-                className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-blue-100 hover:bg-blue-200 active:bg-blue-300 text-blue-900 transition-all duration-200 flex-shrink-0 shadow-sm hover:shadow-md"
+                className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-blue-100 hover:bg-blue-200 active:bg-blue-300 text-blue-900 transition-all duration-200 flex-shrink-0 shadow-md hover:shadow-lg"
                 aria-label="Volgende dag"
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -491,7 +658,7 @@ export default function PlanningPage() {
                 return (
                   <div
                     key={shift.id}
-                    className={`rounded-xl shadow-sm border p-2.5 sm:p-3 transition-all duration-200 hover:shadow-md ${
+                    className={`rounded-xl shadow-md border p-2.5 sm:p-3 transition-all duration-200 hover:shadow-lg ${
                       isMyShiftValue
                         ? 'bg-green-50 border-green-300 hover:border-green-400'
                         : 'bg-white border-blue-200 hover:border-blue-300'
@@ -519,11 +686,61 @@ export default function PlanningPage() {
                 );
               })}
               
-              {/* Meer info knop voor de hele dag */}
+              {/* Beschikbaar stellen knop */}
               <div className="mt-4 pt-4 border-t border-blue-200">
+                {selectedDayAvailability && selectedDayAvailability.status === 'available' ? (
+                  <div className="space-y-2">
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-2">
+                      <div className="flex items-center gap-2 mb-1">
+                        <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                        </svg>
+                        <span className="text-sm font-medium text-green-800">Je bent beschikbaar voor deze dag</span>
+                      </div>
+                      {selectedDayAvailability.time_slots.length > 0 && (
+                        <div className="text-xs text-green-700 mt-1">
+                          Tijdstippen: {selectedDayAvailability.time_slots.map(getTimeSlotLabel).join(', ')}
+                        </div>
+                      )}
+                      {selectedDayAvailability.message && (
+                        <div className="text-xs text-green-700 mt-2 p-2 bg-green-100 rounded border border-green-300">
+                          <span className="font-semibold">Bijzonderheden:</span> {selectedDayAvailability.message}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => {
+                        setSelectedTimeSlots(selectedDayAvailability.time_slots);
+                        setAvailabilityMessage(selectedDayAvailability.message || '');
+                        setShowAvailabilityModal(true);
+                      }}
+                      className="w-full px-4 py-2.5 bg-green-600 hover:bg-green-700 active:bg-green-800 text-white text-sm font-medium rounded-lg transition-all duration-200 shadow-md hover:shadow-lg"
+                    >
+                      Beschikbaarheid aanpassen
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setSelectedTimeSlots([]);
+                      setAvailabilityMessage('');
+                      setShowAvailabilityModal(true);
+                    }}
+                    className="w-full px-4 py-2.5 bg-green-600 hover:bg-green-700 active:bg-green-800 text-white text-sm font-medium rounded-lg transition-all duration-200 shadow-md hover:shadow-lg flex items-center justify-center gap-2"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                    </svg>
+                    Beschikbaar stellen
+                  </button>
+                )}
+              </div>
+              
+              {/* Meer info knop voor de hele dag */}
+              <div className="mt-3">
                 <button
                   onClick={() => router.push(`/planning/day/${selectedDay.toISOString().split('T')[0]}`)}
-                  className="w-full px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm font-medium rounded-lg transition-all duration-200 shadow-sm hover:shadow-md"
+                  className="w-full px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm font-medium rounded-lg transition-all duration-200 shadow-md hover:shadow-lg"
                 >
                   Meer info over deze dag
                 </button>
@@ -531,7 +748,7 @@ export default function PlanningPage() {
             </div>
           ) : (
             /* Lege staat */
-            <div className="bg-white rounded-xl shadow-sm border border-blue-200 p-8 sm:p-12 text-center hover:shadow-md transition-shadow">
+            <div className="bg-white rounded-xl shadow-md border border-blue-200 p-8 sm:p-12 text-center hover:shadow-lg transition-shadow">
               <svg
                 className="w-16 h-16 text-blue-300 mx-auto mb-4"
                 fill="none"
@@ -551,6 +768,92 @@ export default function PlanningPage() {
               <p className="text-sm text-blue-900">
                 Er zijn op deze dag geen medewerkers ingepland.
               </p>
+            </div>
+          )}
+
+          {/* Beschikbaar stellen modal */}
+          {showAvailabilityModal && (
+            <div className="fixed inset-0 flex items-center justify-center z-50 p-4 pointer-events-none" onClick={() => setShowAvailabilityModal(false)}>
+              <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 pointer-events-auto border-2 border-blue-200" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-bold text-blue-900">Beschikbaar stellen</h2>
+                  <button
+                    onClick={() => setShowAvailabilityModal(false)}
+                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                
+                <p className="text-sm text-gray-600 mb-4">
+                  {formatDate(selectedDay)}
+                </p>
+                
+                <p className="text-sm font-medium text-gray-700 mb-3">
+                  Selecteer tijdstippen waarop je beschikbaar bent:
+                </p>
+                
+                <div className="space-y-2 mb-6">
+                  {(['morning', 'afternoon', 'evening'] as TimeSlot[]).map((timeSlot) => {
+                    const isSelected = selectedTimeSlots.includes(timeSlot);
+                    return (
+                      <button
+                        key={timeSlot}
+                        onClick={() => toggleTimeSlot(timeSlot)}
+                        className={`w-full py-3 px-4 rounded-lg border-2 transition-all duration-200 text-left ${
+                          isSelected
+                            ? 'bg-green-600 border-green-700 text-white shadow-md'
+                            : 'bg-white border-gray-300 text-gray-700 hover:border-green-400 hover:bg-green-50'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium">{getTimeSlotLabel(timeSlot)}</span>
+                          {isSelected && (
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                            </svg>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                
+                {/* Berichtveld */}
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Bijzonderheden (optioneel)
+                  </label>
+                  <textarea
+                    value={availabilityMessage}
+                    onChange={(e) => setAvailabilityMessage(e.target.value)}
+                    placeholder="Bijv. Ik kan maar tot 20:00"
+                    className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-200 outline-none transition-all duration-200 resize-none"
+                    rows={3}
+                    maxLength={500}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    {availabilityMessage.length}/500 karakters
+                  </p>
+                </div>
+                
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowAvailabilityModal(false)}
+                    className="flex-1 px-4 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm font-medium rounded-lg transition-all duration-200"
+                  >
+                    Annuleren
+                  </button>
+                  <button
+                    onClick={saveAvailability}
+                    className="flex-1 px-4 py-2.5 bg-green-600 hover:bg-green-700 active:bg-green-800 text-white text-sm font-medium rounded-lg transition-all duration-200 shadow-md hover:shadow-lg"
+                  >
+                    Opslaan
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -574,7 +877,7 @@ export default function PlanningPage() {
         </div>
 
         {/* Maand navigatie */}
-        <div className="mb-6 bg-white rounded-xl shadow-sm border border-blue-200 p-4 hover:shadow-md transition-shadow">
+        <div className="mb-6 bg-white rounded-xl shadow-md border border-blue-200 p-4 hover:shadow-lg transition-shadow">
           <div className="flex items-center justify-between">
             <button
               onClick={goToPreviousMonth}
@@ -608,13 +911,13 @@ export default function PlanningPage() {
         </div>
 
         {/* Kalender grid */}
-        <div className="bg-white rounded-xl shadow-sm border border-blue-200 overflow-hidden hover:shadow-md transition-shadow">
+        <div className="bg-white rounded-xl shadow-lg border border-blue-200 overflow-hidden hover:shadow-xl transition-shadow">
           {/* Weekdag headers */}
           <div className="grid grid-cols-7 border-b-2 border-blue-200">
             {weekDays.map((day, index) => (
               <div
                 key={index}
-                className="p-2 sm:p-3 text-center text-xs sm:text-sm font-semibold text-blue-900 bg-blue-50"
+                className="p-2 sm:p-3 text-center text-xs sm:text-sm font-semibold text-blue-900 bg-blue-50 shadow-sm"
               >
                 {day}
               </div>
@@ -645,8 +948,10 @@ export default function PlanningPage() {
                     transition-all duration-200 active:scale-95
                     ${isCurrentMonthDate ? 'bg-white' : 'bg-blue-50'}
                     ${isTodayDate 
-                      ? 'ring-2 ring-blue-500 ring-inset bg-blue-50' 
-                      : 'hover:bg-blue-50'
+                      ? 'ring-2 ring-blue-500 ring-inset bg-blue-50 shadow-inner' 
+                      : hasShifts 
+                        ? 'hover:bg-blue-50 hover:shadow-md' 
+                        : 'hover:bg-blue-50 hover:shadow-sm'
                     }
                     ${hasShifts ? 'cursor-pointer' : ''}
                   `}
@@ -662,17 +967,17 @@ export default function PlanningPage() {
                         ${
                           hasMyShifts
                             ? isTodayDate
-                              ? 'bg-green-600 text-white ring-2 ring-green-400 ring-offset-1'
-                              : 'bg-green-500 text-white'
+                              ? 'bg-green-600 text-white ring-2 ring-green-400 ring-offset-1 shadow-lg'
+                              : 'bg-green-500 text-white shadow-md hover:shadow-lg'
                             : hasOtherShifts
                               ? isTodayDate
-                                ? 'bg-blue-600 text-white ring-2 ring-blue-400 ring-offset-1'
-                                : 'bg-blue-500 text-white'
+                                ? 'bg-blue-600 text-white ring-2 ring-blue-400 ring-offset-1 shadow-lg'
+                                : 'bg-blue-500 text-white shadow-md hover:shadow-lg'
                               : isTodayDate
-                                ? 'bg-blue-600 text-white ring-2 ring-blue-400 ring-offset-1'
+                                ? 'bg-blue-600 text-white ring-2 ring-blue-400 ring-offset-1 shadow-lg'
                                 : isCurrentMonthDate
-                                  ? 'bg-gray-100 text-gray-700'
-                                  : 'bg-gray-50 text-gray-400'
+                                  ? 'bg-gray-100 text-gray-700 shadow-sm hover:shadow-md'
+                                  : 'bg-gray-50 text-gray-400 shadow-sm'
                         }
                       `}
                       title={
@@ -692,23 +997,40 @@ export default function PlanningPage() {
           </div>
         </div>
 
+        {/* Button naar maandoverzicht */}
+        <div className="mt-6">
+          <button
+            onClick={() => {
+              const year = currentMonth.getFullYear();
+              const month = currentMonth.getMonth() + 1; // JavaScript maanden zijn 0-indexed, maar we willen 1-indexed voor de URL
+              router.push(`/planning/maand?year=${year}&month=${month}`);
+            }}
+            className="w-full px-6 py-3 bg-green-600 hover:bg-green-700 active:bg-green-800 text-white text-sm font-medium rounded-lg transition-all duration-200 shadow-md hover:shadow-lg flex items-center justify-center gap-2"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2Z" />
+            </svg>
+            Bekijk al jouw diensten van deze maand
+          </button>
+        </div>
+
         {/* Legenda */}
-        <div className="mt-6 bg-white rounded-xl shadow-sm border border-blue-200 p-4 hover:shadow-md transition-shadow">
+        <div className="mt-6 bg-white rounded-xl shadow-md border border-blue-200 p-4 hover:shadow-lg transition-shadow">
           <div className="flex items-center gap-4 text-xs sm:text-sm flex-wrap">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-green-500 text-white flex items-center justify-center text-xs sm:text-sm font-semibold">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-green-500 text-white flex items-center justify-center text-xs sm:text-sm font-semibold shadow-md">
                 15
               </div>
               <span className="text-blue-900">Jouw dienst</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs sm:text-sm font-semibold">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs sm:text-sm font-semibold shadow-md">
                 20
               </div>
               <span className="text-blue-900">Andere diensten</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gray-100 text-gray-700 flex items-center justify-center text-xs sm:text-sm font-semibold">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gray-100 text-gray-700 flex items-center justify-center text-xs sm:text-sm font-semibold shadow-sm">
                 25
               </div>
               <span className="text-blue-900">Geen diensten</span>
