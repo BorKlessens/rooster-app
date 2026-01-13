@@ -107,11 +107,11 @@ body {
 
 /* Utility class voor content onder fixed header */
 .header-offset {
-  padding-top: calc(60px + env(safe-area-inset-top, 0));
+  padding-top: calc(76px + env(safe-area-inset-top, 0));
 }
 
 @media (min-width: 640px) {
   .header-offset {
-    padding-top: calc(64px + env(safe-area-inset-top, 0));
+    padding-top: calc(84px + env(safe-area-inset-top, 0));
   }
 }

@@ -65,6 +65,14 @@ export default function Navigation() {
         navElement.style.setProperty('right', '0', 'important');
         navElement.style.setProperty('width', '100%', 'important');
         navElement.style.setProperty('z-index', '9999', 'important');
+        
+        // Behoud transform voor menuOpen state - check actuele state
+        const isMenuOpen = document.body.getAttribute('data-menu-open') === 'true';
+        if (isMenuOpen) {
+          navElement.style.setProperty('transform', 'translateY(100%)', 'important');
+        } else {
+          navElement.style.setProperty('transform', 'translateY(0)', 'important');
+        }
       } else if (window.innerWidth > 768 && navElement) {
         // Op desktop, reset naar relative
         navElement.style.removeProperty('position');
@@ -72,6 +80,7 @@ export default function Navigation() {
         navElement.style.removeProperty('left');
         navElement.style.removeProperty('right');
         navElement.style.removeProperty('width');
+        navElement.style.removeProperty('transform');
       }
     };
 
@@ -84,15 +93,15 @@ export default function Navigation() {
     return () => {
       window.removeEventListener('resize', enforceFixedPosition);
     };
-  }, [pathname]);
+  }, [pathname, menuOpen]);
 
-  // Check of hamburger menu open is
+  // Check of hamburger menu open is (alleen op client)
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
     const checkMenuState = () => {
-      if (typeof document !== 'undefined') {
-        const isOpen = document.body.getAttribute('data-menu-open') === 'true';
-        setMenuOpen(isOpen);
-      }
+      const isOpen = document.body.getAttribute('data-menu-open') === 'true';
+      setMenuOpen(isOpen);
     };
 
     // Check initial state
@@ -100,17 +109,42 @@ export default function Navigation() {
 
     // Luister naar wijzigingen in data attribute
     const observer = new MutationObserver(checkMenuState);
-    if (typeof document !== 'undefined') {
-      observer.observe(document.body, {
-        attributes: true,
-        attributeFilter: ['data-menu-open']
-      });
-    }
+    observer.observe(document.body, {
+      attributes: true,
+      attributeFilter: ['data-menu-open']
+    });
 
     return () => {
       observer.disconnect();
     };
   }, []);
+
+  // Update transform style wanneer menuOpen verandert (alleen op client)
+  // Gebruik een timeout om te wachten tot navRef is geïnitialiseerd
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    // Wacht tot navRef is geïnitialiseerd
+    const updateTransform = () => {
+      if (!navRef.current) {
+        // Probeer opnieuw na een korte delay
+        setTimeout(updateTransform, 10);
+        return;
+      }
+      
+      const navElement = navRef.current;
+      // Alleen op mobiel transform toepassen
+      if (window.innerWidth <= 768) {
+        if (menuOpen) {
+          navElement.style.setProperty('transform', 'translateY(100%)', 'important');
+        } else {
+          navElement.style.setProperty('transform', 'translateY(0)', 'important');
+        }
+      }
+    };
+    
+    updateTransform();
+  }, [menuOpen]);
 
   // Verberg navigatie op login, welcome en signup pagina's
   if (isLoginPage || isWelcomePage || isSignUpPage) {
@@ -137,7 +171,7 @@ export default function Navigation() {
     <nav 
       ref={navRef}
       id="bottom-navigation"
-      className="fixed bottom-0 left-0 right-0 z-[9999] md:relative md:z-50 md:px-4 md:pb-4"
+      className="fixed bottom-0 left-0 right-0 z-[9999] md:relative md:z-50 md:px-4 md:pb-4 transition-transform duration-300 md:!transform-none"
       style={{
         paddingBottom: 'max(0px, env(safe-area-inset-bottom))',
         position: 'fixed',

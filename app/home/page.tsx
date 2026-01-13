@@ -85,11 +85,18 @@ export default function HomePage() {
     return (
     <div className="h-screen bg-blue-50 pb-20 overflow-hidden flex flex-col">
       <UserHeader title="Home" username={username || undefined} fullName={fullName} />
-      <div className="w-full flex-1 flex flex-col relative header-offset">
+      <div className="w-full flex-1 flex flex-col relative">
         {/* Welkomsttekst in het midden met hero image */}
-        <div className="flex-1 flex items-center justify-center relative">
-          {/* Hero image achtergrond */}
-          <div className="absolute inset-0 flex items-center justify-center opacity-30">
+        <div className="flex-1 flex items-center justify-center relative header-offset">
+          {/* Hero image achtergrond - helemaal tot boven */}
+          <div 
+            className="absolute left-0 right-0 flex items-center justify-center opacity-30" 
+            style={{ 
+              top: `calc(-76px - env(safe-area-inset-top, 0))`,
+              bottom: 0,
+              height: `calc(100% + 76px + env(safe-area-inset-top, 0))`
+            }}
+          >
             <div className="relative w-full h-full">
               <Image
                 src="/elckerlyc.jpg"
