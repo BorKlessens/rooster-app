@@ -28,6 +28,10 @@ export default function LoginPage() {
     document.documentElement.style.overflow = 'hidden';
     document.body.style.background = 'transparent';
     document.documentElement.style.background = 'transparent';
+    document.body.style.paddingTop = '0';
+    document.documentElement.style.paddingTop = '0';
+    document.body.style.marginTop = '0';
+    document.documentElement.style.marginTop = '0';
     
     // Zorg ervoor dat admin account bestaat (direct bij mount)
     createAdminAccountIfNeeded().catch(console.error);
@@ -37,6 +41,10 @@ export default function LoginPage() {
       document.documentElement.style.overflow = 'unset';
       document.body.style.background = '';
       document.documentElement.style.background = '';
+      document.body.style.paddingTop = '';
+      document.documentElement.style.paddingTop = '';
+      document.body.style.marginTop = '';
+      document.documentElement.style.marginTop = '';
     };
   }, []);
 
@@ -179,7 +187,13 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="fixed top-0 left-0 right-0 bottom-0 w-full h-full overflow-hidden m-0 p-0" style={{ height: '100dvh', width: '100vw' }}>
+    <div className="fixed top-0 left-0 right-0 bottom-0 w-full h-full overflow-hidden m-0 p-0" style={{ 
+      height: '100dvh', 
+      width: '100vw',
+      marginTop: 0,
+      paddingTop: 0,
+      top: 0
+    }}>
       {/* Achtergrond afbeelding */}
       <div className="absolute inset-0 h-full w-full m-0 p-0">
         <Image
