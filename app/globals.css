@@ -26,6 +26,13 @@ html {
   padding: 0;
 }
 
+/* Forceer geen padding/margin op fullscreen pagina's */
+html[data-fullscreen-page],
+body[data-fullscreen-page] {
+  padding-top: 0 !important;
+  margin-top: 0 !important;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
@@ -36,8 +43,19 @@ body {
   -webkit-tap-highlight-color: transparent;
   margin: 0;
   padding: 0;
-  /* Verwijder safe area insets voor PWA */
+  /* Verwijder safe area insets voor PWA - alleen op pagina's die het nodig hebben */
+  padding-top: 0;
+}
+
+/* Voeg padding-top alleen toe op pagina's die het nodig hebben (niet login/signup/welcome) */
+body:not([data-fullscreen-page]) {
   padding-top: env(safe-area-inset-top, 0);
+}
+
+/* Forceer geen padding-top op fullscreen pagina's */
+body[data-fullscreen-page] {
+  padding-top: 0 !important;
+  margin-top: 0 !important;
 }
 
 /* Zorg ervoor dat de navbar altijd onderaan blijft op mobiel en niet meescrollt */

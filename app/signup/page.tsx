@@ -29,10 +29,12 @@ export default function SignUpPage() {
     document.documentElement.style.overflow = 'hidden';
     document.body.style.background = 'transparent';
     document.documentElement.style.background = 'transparent';
-    document.body.style.paddingTop = '0';
+    document.body.style.setProperty('padding-top', '0', 'important');
     document.documentElement.style.paddingTop = '0';
     document.body.style.marginTop = '0';
     document.documentElement.style.marginTop = '0';
+    document.body.setAttribute('data-fullscreen-page', 'true');
+    document.documentElement.setAttribute('data-fullscreen-page', 'true');
     
     return () => {
       document.body.style.overflow = 'unset';
@@ -43,6 +45,8 @@ export default function SignUpPage() {
       document.documentElement.style.paddingTop = '';
       document.body.style.marginTop = '';
       document.documentElement.style.marginTop = '';
+      document.body.removeAttribute('data-fullscreen-page');
+      document.documentElement.removeAttribute('data-fullscreen-page');
     };
   }, []);
 
