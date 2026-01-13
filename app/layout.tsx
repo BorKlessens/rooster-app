@@ -4,6 +4,7 @@ import "./globals.css";
 import Navigation from "./components/Navigation";
 import MainContent from "./components/MainContent";
 import AdminAccountSetup from "./components/AdminAccountSetup";
+import ServiceWorkerRegistration from "./components/ServiceWorkerRegistration";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -18,6 +19,17 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Rooster App - Planning voor Horeca",
   description: "Planning en rooster beheer voor horeca medewerkers en managers",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Rooster App",
+  },
+  icons: {
+    icon: "/logo_200x200.png",
+    apple: "/logo_200x200.png",
+  },
+  themeColor: "#2563eb",
 };
 
 export const viewport: Viewport = {
@@ -37,6 +49,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <ServiceWorkerRegistration />
         <AdminAccountSetup />
         <Navigation />
         <MainContent>

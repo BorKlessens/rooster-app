@@ -1,0 +1,23 @@
+{
+  "name": "Rooster App - Planning voor Horeca",
+  "short_name": "Rooster",
+  "description": "Planning en rooster beheer voor horeca medewerkers en managers",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#dbeafe",
+  "theme_color": "#2563eb",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/logo_200x200.png",
+      "sizes": "200x200",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "business"],
+  "screenshots": [],
+  "prefer_related_applications": false
+}
+
