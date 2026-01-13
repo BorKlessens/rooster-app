@@ -22,6 +22,8 @@
 html {
   height: 100%;
   overflow-x: hidden;
+  margin: 0;
+  padding: 0;
 }
 
 body {
@@ -32,6 +34,10 @@ body {
   position: relative;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+  margin: 0;
+  padding: 0;
+  /* Verwijder safe area insets voor PWA */
+  padding-top: env(safe-area-inset-top, 0);
 }
 
 /* Zorg ervoor dat de navbar altijd onderaan blijft op mobiel en niet meescrollt */
@@ -96,5 +102,16 @@ body {
   /* Voorkom dat transform op parent containers de navbar beïnvloedt */
   body > *:not(nav#bottom-navigation) {
     transform: none !important;
+  }
+}
+
+/* Utility class voor content onder fixed header */
+.header-offset {
+  padding-top: calc(60px + env(safe-area-inset-top, 0));
+}
+
+@media (min-width: 640px) {
+  .header-offset {
+    padding-top: calc(64px + env(safe-area-inset-top, 0));
   }
 }

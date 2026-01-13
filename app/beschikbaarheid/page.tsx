@@ -545,7 +545,7 @@ export default function AvailabilityPage() {
   return (
     <div className="min-h-screen bg-blue-50 pb-24">
       <UserHeader title="Beschikbaarheid" username={username} fullName={fullName} />
-      <div className="max-w-2xl mx-auto px-4 py-6 sm:py-8">
+      <div className="max-w-2xl mx-auto px-4 py-6 sm:py-8 header-offset">
         {/* Beschrijving */}
         <div className="mb-6">
           <p className="text-sm sm:text-base text-blue-900">

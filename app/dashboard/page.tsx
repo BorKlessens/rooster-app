@@ -267,7 +267,7 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-blue-50 pb-20">
       <UserHeader title="Dashboard" username={username} fullName={fullName} />
-      <div className="max-w-md mx-auto px-4 py-6 sm:py-8">
+      <div className="max-w-md mx-auto px-4 py-6 sm:py-8 header-offset">
         {/* Today's Shift Card */}
         {todayShift ? (
           <div className="bg-white rounded-xl p-5 mb-4 border border-blue-200 shadow-sm hover:shadow-md transition-shadow">

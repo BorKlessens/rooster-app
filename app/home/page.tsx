@@ -85,7 +85,7 @@ export default function HomePage() {
     return (
     <div className="h-screen bg-blue-50 pb-20 overflow-hidden flex flex-col">
       <UserHeader title="Home" username={username || undefined} fullName={fullName} />
-      <div className="w-full flex-1 flex flex-col relative">
+      <div className="w-full flex-1 flex flex-col relative header-offset">
         {/* Welkomsttekst in het midden met hero image */}
         <div className="flex-1 flex items-center justify-center relative">
           {/* Hero image achtergrond */}

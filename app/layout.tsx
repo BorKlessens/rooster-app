@@ -22,14 +22,14 @@ export const metadata: Metadata = {
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
-    statusBarStyle: "default",
+    statusBarStyle: "black-translucent",
     title: "Rooster App",
   },
   icons: {
     icon: "/logo_200x200.png",
     apple: "/logo_200x200.png",
   },
-  themeColor: "#2563eb",
+  themeColor: "#ffffff",
 };
 
 export const viewport: Viewport = {

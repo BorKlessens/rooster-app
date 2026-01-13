@@ -174,7 +174,7 @@ function MaandOverzichtContent() {
     return (
       <div className="min-h-screen bg-blue-50 pb-24">
         <UserHeader title="Maandoverzicht" username={username} fullName={fullName} />
-        <div className="max-w-4xl mx-auto px-4 py-6 sm:py-8">
+        <div className="max-w-4xl mx-auto px-4 py-6 sm:py-8 header-offset">
           <button
             onClick={() => router.back()}
             className="flex items-center gap-2 text-blue-600 hover:text-blue-800 mb-4 transition-colors"
@@ -195,7 +195,7 @@ function MaandOverzichtContent() {
   return (
     <div className="min-h-screen bg-blue-50 pb-24">
       <UserHeader title="Maandoverzicht" username={username} fullName={fullName} />
-      <div className="max-w-4xl mx-auto px-4 py-6 sm:py-8">
+      <div className="max-w-4xl mx-auto px-4 py-6 sm:py-8 header-offset">
         {/* Terug knop */}
         <button
           onClick={() => router.back()}

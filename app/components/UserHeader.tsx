@@ -40,7 +40,7 @@ export default function UserHeader({ title, username, fullName }: UserHeaderProp
   return (
     <>
       {/* Header met hamburger menu */}
-      <header className="bg-white border-b border-blue-200 shadow-sm sticky top-0 z-50 relative">
+      <header className="bg-white border-b border-blue-200 shadow-sm fixed top-0 left-0 right-0 z-50" style={{ paddingTop: 'env(safe-area-inset-top, 0)' }}>
         <div className="max-w-7xl mx-auto px-4 py-3 sm:py-4 relative z-50">
           <div className="flex items-center justify-between">
             {/* Hamburger menu button */}
