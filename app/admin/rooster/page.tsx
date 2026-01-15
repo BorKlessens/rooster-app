@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { isAdmin, supabase, getCurrentUserId } from '@/lib/supabaseClient';
-import AdminNav from '@/app/components/AdminNav';
+import AdminHeader from '@/app/components/AdminHeader';
 
 /**
  * Admin Rooster pagina
@@ -34,6 +34,8 @@ export default function AdminRoosterPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isAdminUser, setIsAdminUser] = useState(false);
+  const [username, setUsername] = useState<string>('');
+  const [fullName, setFullName] = useState<string>('');
   
   // State voor huidige maand
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
@@ -61,11 +63,23 @@ export default function AdminRoosterPage() {
   useEffect(() => {
     const checkAuth = async () => {
       const loggedIn = localStorage.getItem('isLoggedIn') === 'true';
+      const user = localStorage.getItem('username');
       setIsLoggedIn(loggedIn);
+      setUsername(user || '');
       
       if (!loggedIn) {
         router.push('/login');
         return;
+      }
+      
+      // Haal volledige naam op
+      const storedUsers = localStorage.getItem('users');
+      if (storedUsers && user) {
+        const users = JSON.parse(storedUsers);
+        const userData = users.find((u: { username: string }) => u.username === user);
+        if (userData && userData.fullName) {
+          setFullName(userData.fullName);
+        }
       }
       
       const admin = await isAdmin();
@@ -428,8 +442,8 @@ export default function AdminRoosterPage() {
     
     return (
       <div className="min-h-screen bg-blue-50 pb-24">
-        <AdminNav />
-        <div className="max-w-2xl mx-auto px-4 py-6 sm:py-8 pt-20 sm:pt-8">
+        <AdminHeader title="Rooster" username={username} fullName={fullName} />
+        <div className="max-w-2xl mx-auto px-4 py-6 sm:py-8 header-offset">
           {/* Header met terug knop */}
           <div className="mb-6">
             <div className="flex items-center justify-between mb-4 gap-3">
@@ -757,13 +771,10 @@ export default function AdminRoosterPage() {
 
   return (
     <div className="min-h-screen bg-blue-50 pb-24">
-      <AdminNav />
-      <div className="max-w-4xl mx-auto px-4 py-6 sm:py-8 pt-20 sm:pt-8">
-        {/* Beschrijving */}
+      <AdminHeader title="Rooster" username={username} fullName={fullName} />
+      <div className="max-w-4xl mx-auto px-4 py-6 sm:py-8 header-offset">
+        {/* Header */}
         <div className="mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold text-blue-900 mb-2">
-            Rooster Beheer
-          </h1>
           <p className="text-sm sm:text-base text-blue-900">
             Bekijk en beheer alle ingeplande diensten
           </p>

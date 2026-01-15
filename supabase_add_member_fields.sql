@@ -24,3 +24,5 @@ COMMENT ON COLUMN public.users.birthday IS 'Verjaardag van de medewerker';
 
 
 
+
+

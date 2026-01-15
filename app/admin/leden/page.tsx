@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase, isAdmin } from '@/lib/supabaseClient'
-import AdminNav from '@/app/components/AdminNav'
+import { hashPassword } from '@/lib/passwordUtils'
+import AdminHeader from '@/app/components/AdminHeader'
 
 /**
  * Admin Ledenlijst pagina
@@ -28,18 +29,47 @@ export default function AdminLedenPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [isAdminUser, setIsAdminUser] = useState(false)
+  const [username, setUsername] = useState<string>('')
+  const [fullName, setFullName] = useState<string>('')
   const [members, setMembers] = useState<Member[]>([])
   const [filterName, setFilterName] = useState('')
   const [sortBy, setSortBy] = useState<'name' | 'created'>('name')
   const [expandedMembers, setExpandedMembers] = useState<Set<string>>(new Set())
+  
+  // State voor modals
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [editingMember, setEditingMember] = useState<Member | null>(null)
+  
+  // State voor formulier velden
+  const [formUsername, setFormUsername] = useState('')
+  const [formFullName, setFormFullName] = useState('')
+  const [formEmail, setFormEmail] = useState('')
+  const [formPhone, setFormPhone] = useState('')
+  const [formBirthday, setFormBirthday] = useState('')
+  const [formPassword, setFormPassword] = useState('')
+  const [formError, setFormError] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
     const loggedIn = localStorage.getItem('isLoggedIn') === 'true'
+    const user = localStorage.getItem('username')
     setIsLoggedIn(loggedIn)
+    setUsername(user || '')
     
     if (!loggedIn) {
       router.push('/login')
       return
+    }
+
+    // Haal volledige naam op
+    const storedUsers = localStorage.getItem('users')
+    if (storedUsers && user) {
+      const users = JSON.parse(storedUsers)
+      const userData = users.find((u: { username: string }) => u.username === user)
+      if (userData && userData.fullName) {
+        setFullName(userData.fullName)
+      }
     }
 
     checkAdmin()
@@ -184,6 +214,204 @@ export default function AdminLedenPage() {
     }
   }
 
+  const resetForm = () => {
+    setFormUsername('')
+    setFormFullName('')
+    setFormEmail('')
+    setFormPhone('')
+    setFormBirthday('')
+    setFormPassword('')
+    setFormError('')
+    setIsSubmitting(false)
+  }
+
+  const openAddModal = () => {
+    resetForm()
+    setShowAddModal(true)
+  }
+
+  const openEditModal = (member: Member) => {
+    setEditingMember(member)
+    setFormUsername(member.username)
+    setFormFullName(member.full_name || '')
+    setFormEmail(member.email || '')
+    setFormPhone(member.phone || '')
+    setFormBirthday(member.birthday ? member.birthday.split('T')[0] : '')
+    setFormPassword('')
+    setFormError('')
+    setShowEditModal(true)
+  }
+
+  const closeModals = () => {
+    setShowAddModal(false)
+    setShowEditModal(false)
+    setEditingMember(null)
+    resetForm()
+  }
+
+  const handleAddMember = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    setFormError('')
+    setIsSubmitting(true)
+
+    try {
+      const normalizedUsername = formUsername.trim().toLowerCase()
+
+      // Validatie
+      if (!normalizedUsername) {
+        setFormError('Gebruikersnaam is verplicht')
+        setIsSubmitting(false)
+        return
+      }
+
+      if (!formPassword.trim()) {
+        setFormError('Wachtwoord is verplicht')
+        setIsSubmitting(false)
+        return
+      }
+
+      // Check of username al bestaat (case-insensitive opgeslagen als lowercase)
+      const { data: existingUsers } = await supabase
+        .from('users')
+        .select('id')
+        .eq('username', normalizedUsername)
+        .limit(1)
+
+      if (existingUsers && existingUsers.length > 0) {
+        setFormError('Deze gebruikersnaam is al in gebruik')
+        setIsSubmitting(false)
+        return
+      }
+
+      // Hash wachtwoord
+      const passwordHash = await hashPassword(formPassword)
+
+      // Maak nieuwe gebruiker
+      const { data: newUser, error } = await supabase
+        .from('users')
+        .insert({
+          username: normalizedUsername,
+          full_name: formFullName.trim() || formUsername.trim(),
+          email: formEmail.trim() || null,
+          phone: formPhone.trim() || null,
+          birthday: formBirthday || null,
+          password_hash: passwordHash,
+          role: 'user',
+        })
+        .select()
+        .single()
+
+      if (error) {
+        console.error('Error adding member:', error)
+        setFormError(`Fout bij toevoegen: ${error.message}`)
+        setIsSubmitting(false)
+        return
+      }
+
+      // Herlaad ledenlijst
+      await loadMembers()
+      setIsSubmitting(false)
+      closeModals()
+    } catch (error: any) {
+      console.error('Unexpected error:', error)
+      setFormError(`Onverwachte fout: ${error.message}`)
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleEditMember = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    setFormError('')
+    setIsSubmitting(true)
+
+    if (!editingMember) {
+      setIsSubmitting(false)
+      return
+    }
+
+    try {
+      const normalizedUsername = formUsername.trim().toLowerCase()
+
+      // Validatie
+      if (!normalizedUsername) {
+        setFormError('Gebruikersnaam is verplicht')
+        setIsSubmitting(false)
+        return
+      }
+
+      // Check of username al bestaat (behalve voor huidige gebruiker)
+      if (normalizedUsername !== editingMember.username) {
+        const { data: existingUsers } = await supabase
+          .from('users')
+          .select('id')
+          .eq('username', normalizedUsername)
+          .limit(1)
+
+        if (existingUsers && existingUsers.length > 0) {
+          setFormError('Deze gebruikersnaam is al in gebruik')
+          setIsSubmitting(false)
+          return
+        }
+      }
+
+      // Update data object
+      // We slaan gebruikersnaam altijd in lowercase op zodat inloggen altijd case-insensitive werkt.
+      const updateData: any = {
+        username: normalizedUsername,
+        full_name: formFullName.trim() || formUsername.trim(),
+        email: formEmail.trim() || null,
+        phone: formPhone.trim() || null,
+        birthday: formBirthday || null,
+      }
+
+      // Alleen wachtwoord updaten als ingevuld
+      if (formPassword.trim()) {
+        const passwordHash = await hashPassword(formPassword)
+        updateData.password_hash = passwordHash
+      }
+
+      // Log wat we naar Supabase sturen (handig voor debuggen)
+      console.log('Updating member with data:', {
+        id: editingMember.id,
+        ...updateData,
+      })
+
+      // Update gebruiker
+      const { error } = await supabase
+        .from('users')
+        .update(updateData)
+        .eq('id', editingMember.id)
+
+      if (error) {
+        // Log zoveel mogelijk info over de Supabase error
+        console.error('Error updating member:', error)
+        try {
+          console.error('Error (stringified):', JSON.stringify(error))
+        } catch {
+          // negeer stringify-fouten
+        }
+
+        const message =
+          (typeof error.message === 'string' && error.message) ||
+          (typeof (error as any).hint === 'string' && (error as any).hint) ||
+          (typeof (error as any).details === 'string' && (error as any).details) ||
+          'Onbekende fout'
+
+        setFormError(`Fout bij bijwerken: ${message}`)
+        setIsSubmitting(false)
+        return
+      }
+
+      // Herlaad ledenlijst
+      await loadMembers()
+      closeModals()
+    } catch (error: any) {
+      console.error('Unexpected error:', error)
+      setFormError(`Onverwachte fout: ${error.message}`)
+      setIsSubmitting(false)
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -201,16 +429,24 @@ export default function AdminLedenPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
-      <AdminNav />
-      <div className="max-w-6xl mx-auto px-4 py-6 sm:py-8 pt-20 sm:pt-8">
+      <AdminHeader title="Ledenlijst" username={username} fullName={fullName} />
+      <div className="max-w-6xl mx-auto px-4 py-6 sm:py-8 header-offset">
         {/* Header */}
-        <div className="mb-4 sm:mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
-            Ledenlijst
-          </h1>
-          <p className="text-sm sm:text-base text-gray-600">
-            Overzicht van alle medewerkers met contactgegevens
-          </p>
+        <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+          <div>
+            <p className="text-sm sm:text-base text-gray-600">
+              Overzicht van alle medewerkers met contactgegevens
+            </p>
+          </div>
+          <button
+            onClick={openAddModal}
+            className="w-full sm:w-auto bg-blue-600 text-white px-4 py-2.5 rounded-lg hover:bg-blue-700 active:bg-blue-800 transition-all duration-200 text-sm font-medium shadow-sm hover:shadow-md flex items-center justify-center gap-2"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            Nieuwe medewerker
+          </button>
         </div>
 
         {/* Filters en sorteer opties */}
@@ -351,10 +587,22 @@ export default function AdminLedenPage() {
                         </div>
 
                         {/* Aangemaakt */}
-                        <div className="pt-2 border-t border-gray-100">
+                        <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
                           <span className="text-xs text-gray-400">
                             Lid sinds {formatDate(member.created_at)}
                           </span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              openEditModal(member)
+                            }}
+                            className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center gap-1.5 px-2 py-1 rounded hover:bg-blue-50 transition-colors"
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
+                            </svg>
+                            Bewerken
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -413,6 +661,254 @@ export default function AdminLedenPage() {
                   {members.filter(m => m.birthday).length}
                 </div>
                 <div className="text-gray-600 text-xs sm:text-sm">Met verjaardag</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal voor nieuwe medewerker */}
+        {showAddModal && (
+          <div className="fixed inset-0 flex items-center justify-center z-50 p-4 pointer-events-none" onClick={closeModals}>
+            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto pointer-events-auto border-2 border-blue-200" onClick={(e) => e.stopPropagation()}>
+              <div className="p-4 sm:p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-bold text-gray-900">Nieuwe medewerker toevoegen</h2>
+                  <button
+                    onClick={closeModals}
+                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                <form onSubmit={handleAddMember} className="space-y-4">
+                  {formError && (
+                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                      {formError}
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Gebruikersnaam <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formUsername}
+                      onChange={(e) => setFormUsername(e.target.value)}
+                      required
+                      className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                      placeholder="bijv. jan.jansen"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Volledige naam
+                    </label>
+                    <input
+                      type="text"
+                      value={formFullName}
+                      onChange={(e) => setFormFullName(e.target.value)}
+                      className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                      placeholder="bijv. Jan Jansen"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      value={formEmail}
+                      onChange={(e) => setFormEmail(e.target.value)}
+                      className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                      placeholder="bijv. jan@voorbeeld.nl"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Telefoonnummer
+                    </label>
+                    <input
+                      type="tel"
+                      value={formPhone}
+                      onChange={(e) => setFormPhone(e.target.value)}
+                      className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                      placeholder="bijv. 0612345678"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Verjaardag
+                    </label>
+                    <input
+                      type="date"
+                      value={formBirthday}
+                      onChange={(e) => setFormBirthday(e.target.value)}
+                      className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Wachtwoord <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="password"
+                      value={formPassword}
+                      onChange={(e) => setFormPassword(e.target.value)}
+                      required
+                      className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                      placeholder="Minimaal 6 tekens"
+                    />
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={closeModals}
+                      className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                      disabled={isSubmitting}
+                    >
+                      Annuleren
+                    </button>
+                    <button
+                      type="submit"
+                      className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={isSubmitting}
+                    >
+                      {isSubmitting ? 'Bezig...' : 'Toevoegen'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal voor bewerken medewerker */}
+        {showEditModal && editingMember && (
+          <div className="fixed inset-0 flex items-center justify-center z-50 p-4 pointer-events-none" onClick={closeModals}>
+            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto pointer-events-auto border-2 border-blue-200" onClick={(e) => e.stopPropagation()}>
+              <div className="p-4 sm:p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-bold text-gray-900">Medewerker bewerken</h2>
+                  <button
+                    onClick={closeModals}
+                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                <form onSubmit={handleEditMember} className="space-y-4">
+                  {formError && (
+                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                      {formError}
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Gebruikersnaam <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formUsername}
+                      onChange={(e) => setFormUsername(e.target.value)}
+                      required
+                      className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Volledige naam
+                    </label>
+                    <input
+                      type="text"
+                      value={formFullName}
+                      onChange={(e) => setFormFullName(e.target.value)}
+                      className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      value={formEmail}
+                      onChange={(e) => setFormEmail(e.target.value)}
+                      className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Telefoonnummer
+                    </label>
+                    <input
+                      type="tel"
+                      value={formPhone}
+                      onChange={(e) => setFormPhone(e.target.value)}
+                      className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Verjaardag
+                    </label>
+                    <input
+                      type="date"
+                      value={formBirthday}
+                      onChange={(e) => setFormBirthday(e.target.value)}
+                      className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Nieuw wachtwoord (optioneel)
+                    </label>
+                    <input
+                      type="password"
+                      value={formPassword}
+                      onChange={(e) => setFormPassword(e.target.value)}
+                      className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                      placeholder="Laat leeg om niet te wijzigen"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">Laat leeg om het huidige wachtwoord te behouden</p>
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={closeModals}
+                      className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                      disabled={isSubmitting}
+                    >
+                      Annuleren
+                    </button>
+                    <button
+                      type="submit"
+                      className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={isSubmitting}
+                    >
+                      {isSubmitting ? 'Bezig...' : 'Opslaan'}
+                    </button>
+                  </div>
+                </form>
               </div>
             </div>
           </div>

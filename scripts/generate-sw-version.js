@@ -22,3 +22,5 @@ fs.writeFileSync(swPath, swContent, 'utf8');
 
 console.log(`Service Worker versie geüpdatet naar: ${version}`);
 
+
+

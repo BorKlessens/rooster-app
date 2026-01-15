@@ -168,7 +168,9 @@ export default function AvailabilityPage() {
       }
     }
     
+    // Sla dagen op en zorg dat alle dagen ingeklapt zijn
     setDays(weekDays);
+    setExpandedDay(null);
   };
 
   /**

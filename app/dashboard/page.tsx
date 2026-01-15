@@ -265,20 +265,21 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-blue-50 pb-20">
+    <div className="min-h-screen bg-gradient-to-b from-blue-50 via-blue-50 to-blue-100 pb-20">
       <UserHeader title="Dashboard" username={username} fullName={fullName} />
-      <div className="max-w-md mx-auto px-4 py-6 sm:py-8 header-offset">
+      <div className="max-w-md mx-auto px-4 py-5 sm:py-7 header-offset">
+        <div className="space-y-4">
         {/* Today's Shift Card */}
         {todayShift ? (
-          <div className="bg-white rounded-xl p-5 mb-4 border border-blue-200 shadow-sm hover:shadow-md transition-shadow">
-            <p className="text-blue-900 text-sm font-medium mb-1">
+          <div className="bg-white/95 backdrop-blur-sm rounded-2xl p-5 border border-blue-200 shadow-md hover:shadow-lg transition-shadow">
+            <p className="text-blue-900 text-sm font-semibold mb-1">
               VANDAAG, {formatDate(todayShift.date)}
             </p>
             <p className="text-blue-900 text-3xl sm:text-4xl font-bold mb-2">
               {formatTime(todayShift.start_time)} - {formatTime(todayShift.end_time)}
             </p>
             {todayShift.role && (
-              <p className="text-blue-900 text-sm mb-2">{todayShift.role}</p>
+            <p className="text-blue-900 text-sm mb-2">{todayShift.role}</p>
             )}
             <div className="flex items-center gap-2 mb-4">
               <svg className="w-4 h-4 text-blue-900" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -294,8 +295,8 @@ export default function DashboardPage() {
             </button>
           </div>
         ) : (
-          <div className="bg-white rounded-xl p-5 mb-4 border border-blue-200 shadow-sm hover:shadow-md transition-shadow">
-            <p className="text-blue-900 text-sm font-medium mb-1">
+          <div className="bg-white/95 backdrop-blur-sm rounded-2xl p-5 border border-blue-200 shadow-md hover:shadow-lg transition-shadow">
+            <p className="text-blue-900 text-sm font-semibold mb-1">
               VANDAAG, {formatDate(new Date().toISOString().split('T')[0])}
             </p>
             <p className="text-blue-900 text-2xl sm:text-3xl font-bold mb-2">
@@ -314,33 +315,35 @@ export default function DashboardPage() {
         )}
 
         {/* Statistieken Cards */}
-        <div className="grid grid-cols-2 gap-3 mb-6">
-          {/* Uren deze maand */}
-          <div className="bg-white rounded-xl p-4 border border-blue-200 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center gap-2 mb-2">
-              <svg className="w-5 h-5 text-blue-900" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-              </svg>
+        <div>
+          <div className="grid grid-cols-2 gap-3">
+            {/* Uren deze maand */}
+            <div className="bg-white/95 backdrop-blur-sm rounded-2xl p-4 border border-blue-200 shadow-md hover:shadow-lg transition-shadow">
+              <div className="flex items-center gap-2 mb-2">
+                <svg className="w-5 h-5 text-blue-900" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                </svg>
+              </div>
+            <p className="text-2xl font-bold text-blue-900 mb-1">{monthlyHours}</p>
+            <p className="text-sm text-blue-900 font-medium">Uren deze maand</p>
             </div>
-            <p className="text-2xl sm:text-3xl font-bold text-blue-900 mb-1">{monthlyHours}</p>
-            <p className="text-xs sm:text-sm text-blue-900 font-medium">Uren deze maand</p>
-          </div>
 
-          {/* Totaal shifts deze maand */}
-          <div className="bg-white rounded-xl p-4 border border-blue-200 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center gap-2 mb-2">
-              <svg className="w-5 h-5 text-blue-900" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
-              </svg>
+            {/* Totaal shifts deze maand */}
+            <div className="bg-white/95 backdrop-blur-sm rounded-2xl p-4 border border-blue-200 shadow-md hover:shadow-lg transition-shadow">
+              <div className="flex items-center gap-2 mb-2">
+                <svg className="w-5 h-5 text-blue-900" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+                </svg>
+              </div>
+            <p className="text-2xl font-bold text-blue-900 mb-1">{monthlyShifts}</p>
+            <p className="text-sm text-blue-900 font-medium">Shifts deze maand</p>
             </div>
-            <p className="text-2xl sm:text-3xl font-bold text-blue-900 mb-1">{monthlyShifts}</p>
-            <p className="text-xs sm:text-sm text-blue-900 font-medium">Shifts deze maand</p>
           </div>
         </div>
 
         {/* Aankomende Shifts */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-3">
+        <div>
+          <div className="flex items-center justify-between mb-2">
             <h2 className="text-lg font-bold text-blue-900">Aankomende shifts</h2>
             {upcomingShifts.length > 0 && (
               <button 
@@ -353,7 +356,7 @@ export default function DashboardPage() {
           </div>
           
           {upcomingShifts.length > 0 ? (
-            <div className="bg-white rounded-xl shadow-sm border border-blue-200 divide-y divide-blue-100 overflow-hidden hover:shadow-md transition-shadow">
+            <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-md border border-blue-200 divide-y divide-blue-100 overflow-hidden hover:shadow-lg transition-shadow">
               {upcomingShifts.map((shift) => (
                 <button
                   key={shift.id}
@@ -373,8 +376,8 @@ export default function DashboardPage() {
                       {formatTime(shift.start_time)} - {formatTime(shift.end_time)}
                     </p>
                   </div>
-                  <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
-                    <span className="text-xs text-blue-600 font-medium">Bekijk rooster</span>
+                    <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
+                      <span className="text-sm text-blue-600 font-medium">Bekijk rooster</span>
                     <svg className="w-5 h-5 text-blue-900" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                     </svg>
@@ -383,23 +386,34 @@ export default function DashboardPage() {
               ))}
             </div>
           ) : (
-            <div className="bg-white rounded-xl shadow-sm border border-blue-200 p-6 text-center">
+            <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-md border border-blue-200 p-6 text-center">
               <svg className="w-12 h-12 text-blue-300 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
               </svg>
               <p className="text-sm text-blue-900 font-medium mb-1">Geen aankomende shifts</p>
-              <p className="text-xs text-blue-700">Je hebt nog geen shifts ingepland</p>
+              <p className="text-sm text-blue-700">Je hebt nog geen shifts ingepland</p>
             </div>
           )}
         </div>
 
+        {/* Meldingen */}
+        <div>
+          <h2 className="text-lg font-bold text-blue-900 mb-2">Meldingen</h2>
+        <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-md border border-blue-200 p-4">
+          <p className="text-sm text-blue-900">
+            Er zijn op dit moment geen nieuwe meldingen.
+          </p>
+        </div>
+      </div>
+
         {/* Snelle actie button */}
         <button
           onClick={() => router.push('/beschikbaarheid')}
-          className="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-200 shadow-md hover:shadow-lg active:shadow-md"
+          className="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold py-4 px-6 rounded-2xl transition-all duration-200 shadow-lg hover:shadow-xl active:shadow-md"
         >
           Beschikbaarheid doorgeven
         </button>
+        </div>
       </div>
     </div>
   );

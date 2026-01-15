@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase, isAdmin } from '@/lib/supabaseClient'
-import AdminNav from '@/app/components/AdminNav'
+import AdminHeader from '@/app/components/AdminHeader'
 
 /**
  * Admin Beschikbaarheid Overzicht pagina
@@ -30,6 +30,8 @@ export default function AdminAvailabilityPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [isAdminUser, setIsAdminUser] = useState(false)
+  const [username, setUsername] = useState<string>('')
+  const [fullName, setFullName] = useState<string>('')
   const [availability, setAvailability] = useState<AvailabilityRecord[]>([])
   const [selectedDate, setSelectedDate] = useState(() => {
     const today = new Date()
@@ -42,11 +44,23 @@ export default function AdminAvailabilityPage() {
 
   useEffect(() => {
     const loggedIn = localStorage.getItem('isLoggedIn') === 'true'
+    const user = localStorage.getItem('username')
     setIsLoggedIn(loggedIn)
+    setUsername(user || '')
     
     if (!loggedIn) {
       router.push('/login')
       return
+    }
+
+    // Haal volledige naam op
+    const storedUsers = localStorage.getItem('users')
+    if (storedUsers && user) {
+      const users = JSON.parse(storedUsers)
+      const userData = users.find((u: { username: string }) => u.username === user)
+      if (userData && userData.fullName) {
+        setFullName(userData.fullName)
+      }
     }
 
     // Check admin status
@@ -170,13 +184,10 @@ export default function AdminAvailabilityPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
-      <AdminNav />
-      <div className="max-w-6xl mx-auto px-4 py-6 sm:py-8 pt-20 sm:pt-8">
+      <AdminHeader title="Beschikbaarheid" username={username} fullName={fullName} />
+      <div className="max-w-6xl mx-auto px-4 py-6 sm:py-8 header-offset">
         {/* Header */}
         <div className="mb-4 sm:mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
-            Beschikbaarheid Overzicht
-          </h1>
           <p className="text-sm sm:text-base text-gray-600">
             Bekijk alle beschikbaarheid van medewerkers
           </p>

@@ -3,7 +3,7 @@
 import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase, isAdmin, getCurrentUserId } from '@/lib/supabaseClient'
-import AdminNav from '@/app/components/AdminNav'
+import AdminHeader from '@/app/components/AdminHeader'
 
 /**
  * Admin Inplannen pagina
@@ -23,6 +23,8 @@ function AdminInplannenPageContent() {
   const [isLoading, setIsLoading] = useState(true)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [isAdminUser, setIsAdminUser] = useState(false)
+  const [username, setUsername] = useState<string>('')
+  const [fullName, setFullName] = useState<string>('')
   const [users, setUsers] = useState<User[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [successMessage, setSuccessMessage] = useState('')
@@ -39,11 +41,23 @@ function AdminInplannenPageContent() {
   useEffect(() => {
     const checkAuth = async () => {
       const loggedIn = localStorage.getItem('isLoggedIn') === 'true'
+      const user = localStorage.getItem('username')
       setIsLoggedIn(loggedIn)
+      setUsername(user || '')
       
       if (!loggedIn) {
         router.push('/login')
         return
+      }
+      
+      // Haal volledige naam op
+      const storedUsers = localStorage.getItem('users')
+      if (storedUsers && user) {
+        const users = JSON.parse(storedUsers)
+        const userData = users.find((u: { username: string }) => u.username === user)
+        if (userData && userData.fullName) {
+          setFullName(userData.fullName)
+        }
       }
       
       // Check admin status
@@ -246,13 +260,10 @@ function AdminInplannenPageContent() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
-      <AdminNav />
-      <div className="max-w-2xl mx-auto px-4 py-6 sm:py-8 pt-20 sm:pt-8">
+      <AdminHeader title="Inplannen" username={username} fullName={fullName} />
+      <div className="max-w-2xl mx-auto px-4 py-6 sm:py-8 header-offset">
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
-            Medewerker Inplannen
-          </h1>
           <p className="text-sm sm:text-base text-gray-600">
             Plan een medewerker in voor een dienst
           </p>
