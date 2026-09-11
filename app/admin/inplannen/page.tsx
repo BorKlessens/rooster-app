@@ -2,8 +2,9 @@
 
 import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { supabase, isAdmin, getCurrentUserId } from '@/lib/supabaseClient'
+import { supabase } from '@/lib/supabaseClient'
 import AdminHeader from '@/app/components/AdminHeader'
+import { useCurrentUser } from '@/app/components/UserProvider'
 
 /**
  * Admin Inplannen pagina
@@ -20,11 +21,8 @@ interface User {
 function AdminInplannenPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { isAdmin: isAdminUser } = useCurrentUser()
   const [isLoading, setIsLoading] = useState(true)
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [isAdminUser, setIsAdminUser] = useState(false)
-  const [username, setUsername] = useState<string>('')
-  const [fullName, setFullName] = useState<string>('')
   const [users, setUsers] = useState<User[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [successMessage, setSuccessMessage] = useState('')
@@ -38,38 +36,14 @@ function AdminInplannenPageContent() {
   const [role, setRole] = useState('')
   const [description, setDescription] = useState('')
 
+  // De middleware laat alleen admins op deze route toe; dit is het vangnet.
   useEffect(() => {
     const checkAuth = async () => {
-      const loggedIn = localStorage.getItem('isLoggedIn') === 'true'
-      const user = localStorage.getItem('username')
-      setIsLoggedIn(loggedIn)
-      setUsername(user || '')
-      
-      if (!loggedIn) {
-        router.push('/login')
+      if (!isAdminUser) {
+        router.replace('/home')
         return
       }
-      
-      // Haal volledige naam op
-      const storedUsers = localStorage.getItem('users')
-      if (storedUsers && user) {
-        const users = JSON.parse(storedUsers)
-        const userData = users.find((u: { username: string }) => u.username === user)
-        if (userData && userData.fullName) {
-          setFullName(userData.fullName)
-        }
-      }
-      
-      // Check admin status
-      const admin = await isAdmin()
-      setIsAdminUser(admin)
-      
-      if (!admin) {
-        router.push('/home')
-        return
-      }
-      
-      // Laad gebruikers (nu async)
+
       await loadUsers()
       
       // Haal query parameters op voor quick plan vanuit beschikbaarheid
@@ -92,99 +66,35 @@ function AdminInplannenPageContent() {
     }
     
     checkAuth()
-  }, [router, searchParams])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdminUser, searchParams])
 
   const loadUsers = async () => {
     try {
-      // Probeer eerst gebruikers op te halen uit Supabase
       const { data: supabaseUsers, error: supabaseError } = await supabase
         .from('users')
-        .select('id, username, full_name, role')
-        .neq('role', 'admin') // Alle gebruikers behalve admin (inclusief null/undefined roles)
+        .select('id, username, full_name')
+        .neq('role', 'admin')
         .order('username', { ascending: true });
 
-      // Debug logging
-      console.log('Supabase users loaded:', supabaseUsers);
-      console.log('Supabase error:', supabaseError);
-
       if (supabaseError) {
-        console.error('Error loading users from Supabase:', supabaseError);
-        // Fallback naar localStorage
-        const storedUsers = localStorage.getItem('users');
-        if (storedUsers) {
-          const usersData = JSON.parse(storedUsers);
-          const regularUsers = usersData
-            .filter((u: { role?: string }) => u.role !== 'admin')
-            .map((u: any) => ({
-              id: u.id,
-              username: u.username,
-              fullName: u.fullName || u.full_name,
-            }));
-          setUsers(regularUsers);
-        }
+        console.error('Error loading users:', supabaseError);
+        setErrorMessage('De medewerkerslijst kon niet geladen worden.');
+        setUsers([]);
         return;
       }
 
-      if (supabaseUsers && supabaseUsers.length > 0) {
-        // Transformeer Supabase data naar het verwachte formaat
-        const formattedUsers = supabaseUsers.map((user) => ({
+      setUsers(
+        (supabaseUsers ?? []).map((user) => ({
           id: user.id,
           username: user.username,
           fullName: user.full_name || user.username,
-        }));
-        console.log('Formatted users for dropdown:', formattedUsers);
-        setUsers(formattedUsers);
-        
-        // Sla ook op in localStorage voor backward compatibility
-        const storedUsers = localStorage.getItem('users');
-        const usersArray = storedUsers ? JSON.parse(storedUsers) : [];
-        supabaseUsers.forEach((supabaseUser) => {
-          const existingIndex = usersArray.findIndex((u: { id: string }) => u.id === supabaseUser.id);
-          if (existingIndex === -1) {
-            usersArray.push({
-              id: supabaseUser.id,
-              username: supabaseUser.username,
-              fullName: supabaseUser.full_name,
-              role: supabaseUser.role,
-            });
-          }
-        });
-        localStorage.setItem('users', JSON.stringify(usersArray));
-        return;
-      }
-
-      // Als Supabase leeg is, probeer localStorage als fallback
-      const storedUsers = localStorage.getItem('users');
-      if (storedUsers) {
-        const usersData = JSON.parse(storedUsers);
-        const regularUsers = usersData
-          .filter((u: { role?: string }) => u.role !== 'admin')
-          .map((u: any) => ({
-            id: u.id,
-            username: u.username,
-            fullName: u.fullName || u.full_name,
-          }));
-        setUsers(regularUsers);
-      }
+        }))
+      );
     } catch (error) {
       console.error('Error loading users:', error);
-      // Fallback naar localStorage bij error
-      try {
-        const storedUsers = localStorage.getItem('users');
-        if (storedUsers) {
-          const usersData = JSON.parse(storedUsers);
-          const regularUsers = usersData
-            .filter((u: { role?: string }) => u.role !== 'admin')
-            .map((u: any) => ({
-              id: u.id,
-              username: u.username,
-              fullName: u.fullName || u.full_name,
-            }));
-          setUsers(regularUsers);
-        }
-      } catch (localError) {
-        console.error('Error loading from localStorage:', localError);
-      }
+      setErrorMessage('De medewerkerslijst kon niet geladen worden.');
+      setUsers([]);
     }
   }
 
@@ -260,7 +170,7 @@ function AdminInplannenPageContent() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
-      <AdminHeader title="Inplannen" username={username} fullName={fullName} />
+      <AdminHeader title="Inplannen" />
       <div className="max-w-2xl mx-auto px-4 py-6 sm:py-8 header-offset">
         {/* Header */}
         <div className="mb-6">

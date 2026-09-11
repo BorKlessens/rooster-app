@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { supabase, getCurrentUserId, isAdmin } from '@/lib/supabaseClient';
+import { supabase } from '@/lib/supabaseClient';
 import UserHeader from '@/app/components/UserHeader';
+import { useCurrentUser } from '@/app/components/UserProvider';
 
 /**
  * Beschikbaarheid pagina
@@ -39,11 +39,9 @@ interface DayAvailability {
 }
 
 export default function AvailabilityPage() {
-  const router = useRouter();
+  const { user } = useCurrentUser();
+  const userId = user?.id ?? null;
   const [isLoading, setIsLoading] = useState(true);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [username, setUsername] = useState<string>('');
-  const [fullName, setFullName] = useState<string>('');
   
   // State voor beschikbaarheid per dag
   const [days, setDays] = useState<DayAvailability[]>([]);
@@ -57,53 +55,14 @@ export default function AvailabilityPage() {
   // State voor berichten per dag (dateString -> message)
   const [dayMessages, setDayMessages] = useState<Map<string, string>>(new Map());
 
-  useEffect(() => {
-    // Check of gebruiker ingelogd is
-    const checkAuth = async () => {
-      const loggedIn = localStorage.getItem('isLoggedIn') === 'true';
-      const user = localStorage.getItem('username');
-      setIsLoggedIn(loggedIn);
-      setUsername(user || '');
-      
-      if (!loggedIn) {
-        router.push('/login');
-        return;
-      }
-      
-      // Haal volledige naam op
-      const storedUsers = localStorage.getItem('users');
-      if (storedUsers && user) {
-        const users = JSON.parse(storedUsers);
-        const userData = users.find((u: { username: string }) => u.username === user);
-        if (userData && userData.fullName) {
-          setFullName(userData.fullName);
-        }
-      }
-      
-      // Check of gebruiker admin is
-      const admin = await isAdmin();
-      if (admin) {
-        router.push('/admin');
-        return;
-      }
-      
-      // Initialiseer dagen voor huidige week
-      initializeWeek().then(() => {
-        setIsLoading(false);
-      });
-    };
-    
-    checkAuth();
-  }, [router, currentWeekStart]);
+  function formatDateToString(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
 
-  /**
-   * Initialiseer de dagen voor de huidige week
-   * Haalt beschikbaarheid op uit Supabase database
-   */
-  const initializeWeek = async () => {
-    const userId = getCurrentUserId();
-    if (!userId) return;
-
+  const initializeWeek = async (userId: string) => {
     const weekDays: DayAvailability[] = [];
     // Maak een kopie van currentWeekStart en reset naar middernacht in lokale tijd
     const baseDate = new Date(currentWeekStart);
@@ -173,15 +132,24 @@ export default function AvailabilityPage() {
     setExpandedDay(null);
   };
 
-  /**
-   * Formatteer datum naar YYYY-MM-DD string (zonder tijdzone problemen)
-   */
-  const formatDateToString = (date: Date): string => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
+  useEffect(() => {
+    if (!userId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    initializeWeek(userId).finally(() => {
+      if (!cancelled) {
+        setIsLoading(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, currentWeekStart]);
 
   /**
    * Toggle het uitklappen van tijdstippen voor een dag
@@ -211,9 +179,7 @@ export default function AvailabilityPage() {
    * - Slaat wijzigingen op in Supabase database
    */
   const toggleTimeSlot = async (date: Date, timeSlot: TimeSlot) => {
-    const userId = getCurrentUserId();
-    const username = localStorage.getItem('username');
-    if (!userId || !username) return;
+    if (!user) return;
 
     setDays(prevDays => 
       prevDays.map(day => {
@@ -256,8 +222,8 @@ export default function AvailabilityPage() {
           supabase
             .from('availability')
             .upsert({
-              user_id: userId,
-              username: username,
+              user_id: user.id,
+              username: user.username,
               date: dateString,
               status: newStatus,
               time_slots: newTimeSlots,
@@ -292,9 +258,7 @@ export default function AvailabilityPage() {
    */
   const toggleLock = async (date: Date, e: React.MouseEvent, keepExpanded: boolean = false) => {
     e.stopPropagation();
-    const userId = getCurrentUserId();
-    const username = localStorage.getItem('username');
-    if (!userId || !username) return;
+    if (!user) return;
     
     setDays(prevDays => 
       prevDays.map(day => {
@@ -318,8 +282,8 @@ export default function AvailabilityPage() {
           supabase
             .from('availability')
             .upsert({
-              user_id: userId,
-              username: username,
+              user_id: user.id,
+              username: user.username,
               date: dateString,
               status: day.status,
               time_slots: day.timeSlots,
@@ -345,9 +309,7 @@ export default function AvailabilityPage() {
    * Sla bericht op voor een specifieke dag
    */
   const saveMessage = async (date: Date, message: string) => {
-    const userId = getCurrentUserId();
-    const username = localStorage.getItem('username');
-    if (!userId || !username) return;
+    if (!user) return;
 
     const dateString = formatDateToString(date);
     
@@ -390,8 +352,8 @@ export default function AvailabilityPage() {
       const { error, data } = await supabase
         .from('availability')
         .upsert({
-          user_id: userId,
-          username: username,
+          user_id: user.id,
+          username: user.username,
           date: dateString,
           status: currentDay.status,
           time_slots: currentDay.timeSlots,
@@ -532,8 +494,8 @@ export default function AvailabilityPage() {
     );
   }
 
-  // Als niet ingelogd, toon loading (redirect wordt afgehandeld in useEffect)
-  if (!isLoggedIn) {
+  // Als niet ingelogd, toon loading (de middleware regelt de redirect)
+  if (!user) {
     return (
       <div className="min-h-screen bg-blue-50 flex items-center justify-center">
         <div className="text-center">
@@ -546,7 +508,7 @@ export default function AvailabilityPage() {
 
   return (
     <div className="min-h-screen bg-blue-50 pb-24">
-      <UserHeader title="Beschikbaarheid" username={username} fullName={fullName} />
+      <UserHeader title="Beschikbaarheid" />
       <div className="max-w-2xl mx-auto px-4 py-6 sm:py-8 header-offset">
         {/* Beschrijving */}
         <div className="mb-6">
@@ -840,7 +802,7 @@ export default function AvailabilityPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
                 </svg>
               </div>
-              <span className="text-blue-900">Een vergrendelde dag kan niet meer gewijzigd worden. Klik op "Bewerken" of op het vinkje om te ontgrendelen en aan te passen.</span>
+              <span className="text-blue-900">Een vergrendelde dag kan niet meer gewijzigd worden. Klik op &quot;Bewerken&quot; of op het vinkje om te ontgrendelen en aan te passen.</span>
             </div>
           </div>
         </div>

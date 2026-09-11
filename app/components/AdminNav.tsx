@@ -1,8 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import Link from 'next/link'
+import { useCurrentUser } from '@/app/components/UserProvider'
 
 /**
  * Admin Navigatie Component
@@ -13,7 +14,7 @@ import Link from 'next/link'
 export default function AdminNav() {
   const [isOpen, setIsOpen] = useState(false)
   const pathname = usePathname()
-  const router = useRouter()
+  const { signOut } = useCurrentUser()
 
   const menuItems = [
     { href: '/admin', label: 'Dashboard', icon: 'dashboard' },
@@ -26,10 +27,8 @@ export default function AdminNav() {
   const isActive = (href: string) => pathname === href
 
   const handleLogout = () => {
-    localStorage.removeItem('isLoggedIn')
-    localStorage.removeItem('username')
-    localStorage.removeItem('userId')
-    router.push('/login')
+    setIsOpen(false)
+    void signOut()
   }
 
   return (

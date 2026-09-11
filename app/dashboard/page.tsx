@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { isAdmin, supabase, getCurrentUserId } from '@/lib/supabaseClient';
+import { supabase } from '@/lib/supabaseClient';
 import UserHeader from '@/app/components/UserHeader';
+import { useCurrentUser } from '@/app/components/UserProvider';
 
 /**
  * Dashboard pagina
@@ -26,11 +27,9 @@ interface Shift {
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { user } = useCurrentUser();
+  const userId = user?.id ?? null;
   const [isLoading, setIsLoading] = useState(true);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [username, setUsername] = useState<string>('');
-  const [fullName, setFullName] = useState<string>('');
-  const [userId, setUserId] = useState<string | null>(null);
   
   // Data states
   const [todayShift, setTodayShift] = useState<Shift | null>(null);
@@ -38,58 +37,19 @@ export default function DashboardPage() {
   const [monthlyHours, setMonthlyHours] = useState<number>(0);
   const [monthlyShifts, setMonthlyShifts] = useState<number>(0);
 
-  useEffect(() => {
-    // Check of gebruiker ingelogd is
-    const checkAuth = async () => {
-      const loggedIn = localStorage.getItem('isLoggedIn') === 'true';
-      const user = localStorage.getItem('username');
-      const currentUserId = getCurrentUserId();
-      
-      setIsLoggedIn(loggedIn);
-      setUserId(currentUserId);
-      
-      if (!loggedIn) {
-        router.push('/login');
-        return;
-      }
-      
-      // Check of gebruiker admin is
-      const admin = await isAdmin();
-      if (admin) {
-        router.push('/admin');
-        return;
-      }
-      
-      if (user) {
-        setUsername(user);
-        
-        // Haal volledige naam op uit opgeslagen gebruikers of Supabase
-        const storedUsers = localStorage.getItem('users');
-        if (storedUsers) {
-          const users = JSON.parse(storedUsers);
-          const userData = users.find((u: { username: string }) => u.username === user);
-          if (userData && userData.fullName) {
-            setFullName(userData.fullName);
-          } else {
-            setFullName(user);
-          }
-        } else {
-          setFullName(user);
-        }
-      }
-      
-      // Laad shifts data
-      if (currentUserId) {
-        await loadShiftsData(currentUserId);
-      }
-      
-      setIsLoading(false);
-    };
-    
-    checkAuth();
-  }, [router]);
+  function parseTime(timeString: string): number | null {
+    if (!timeString) return null;
+    const parts = timeString.split(':');
+    if (parts.length >= 2) {
+      const hours = parseInt(parts[0], 10);
+      const minutes = parseInt(parts[1], 10);
+      const date = new Date();
+      date.setHours(hours, minutes, 0, 0);
+      return date.getTime();
+    }
+    return null;
+  }
 
-  // Laad shifts data uit Supabase
   const loadShiftsData = async (currentUserId: string) => {
     try {
       const today = new Date();
@@ -161,19 +121,24 @@ export default function DashboardPage() {
     }
   };
 
-  // Helper functie om tijd te parsen
-  const parseTime = (timeString: string): number | null => {
-    if (!timeString) return null;
-    const parts = timeString.split(':');
-    if (parts.length >= 2) {
-      const hours = parseInt(parts[0], 10);
-      const minutes = parseInt(parts[1], 10);
-      const date = new Date();
-      date.setHours(hours, minutes, 0, 0);
-      return date.getTime();
+  useEffect(() => {
+    if (!userId) {
+      return;
     }
-    return null;
-  };
+
+    let cancelled = false;
+
+    loadShiftsData(userId).finally(() => {
+      if (!cancelled) {
+        setIsLoading(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
 
   // Formatteer tijd (verwijder seconden)
   const formatTime = (time: string): string => {
@@ -260,13 +225,13 @@ export default function DashboardPage() {
     );
   }
 
-  if (!isLoggedIn) {
+  if (!user) {
     return null;
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 via-blue-50 to-blue-100 pb-20">
-      <UserHeader title="Dashboard" username={username} fullName={fullName} />
+      <UserHeader title="Dashboard" />
       <div className="max-w-md mx-auto px-4 py-5 sm:py-7 header-offset">
         <div className="space-y-4">
         {/* Today's Shift Card */}

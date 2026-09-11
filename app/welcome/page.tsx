@@ -88,12 +88,9 @@ export default function WelcomePage() {
           >
             LOGIN
           </button>
-          <button
-            onClick={() => router.push('/signup')}
-            className="w-full bg-blue-400/30 hover:bg-blue-400/40 active:bg-blue-400/50 border border-blue-300/50 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-200 shadow-md hover:shadow-lg active:shadow-md hover:scale-[1.01] active:scale-[0.99]"
-          >
-            SIGN UP
-          </button>
+          <p className="text-center text-sm text-white/80">
+            Accounts worden aangemaakt door je leidinggevende.
+          </p>
         </div>
       </div>
     </div>

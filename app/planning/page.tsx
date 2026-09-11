@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { isAdmin, supabase, getCurrentUserId } from '@/lib/supabaseClient';
+import { supabase } from '@/lib/supabaseClient';
 import UserHeader from '@/app/components/UserHeader';
+import { useCurrentUser } from '@/app/components/UserProvider';
 
 /**
  * Planning / Rooster pagina
@@ -51,58 +52,22 @@ interface Availability {
   message?: string | null;
 }
 
-// Mock data - later vervangen door Supabase query
-const generateMockShifts = (): Map<string, Shift[]> => {
-  const shifts = new Map<string, Shift[]>();
-  const today = new Date();
-  const userId = getCurrentUserId();
-  
-  // Mock gebruikersnamen
-  const mockUsers = ['Jan Jansen', 'Piet Pietersen', 'Marie de Vries', 'Klaas Klaassen'];
-  
-  // Voeg enkele mock diensten toe voor de komende weken
-  for (let i = 0; i < 30; i++) {
-    const date = new Date(today);
-    date.setDate(today.getDate() + i);
-    
-    // Voeg willekeurig diensten toe (ongeveer 30% kans per dag)
-    if (Math.random() > 0.7) {
-      const dayShifts: Shift[] = [];
-      
-      // 1-2 diensten per dag
-      const numShifts = Math.random() > 0.5 ? 1 : 2;
-      
-      for (let j = 0; j < numShifts; j++) {
-        const startHour = Math.floor(Math.random() * 8) + 9; // Tussen 09:00 en 16:00
-        const duration = Math.floor(Math.random() * 4) + 4; // 4-8 uur
-        const endHour = startHour + duration;
-        const mockUser = mockUsers[Math.floor(Math.random() * mockUsers.length)];
-        const mockUserId = `user_${mockUser.toLowerCase().replace(' ', '_')}`;
-        
-        dayShifts.push({
-          id: `shift-${date.toISOString()}-${j}`,
-          user_id: mockUserId,
-          username: mockUser,
-          startTime: `${startHour.toString().padStart(2, '0')}:00`,
-          endTime: `${endHour.toString().padStart(2, '0')}:00`,
-          role: ['Bediening', 'Keuken', 'Bar'][Math.floor(Math.random() * 3)],
-          description: 'Horeca dienst',
-        });
-      }
-      
-      shifts.set(date.toISOString().split('T')[0], dayShifts);
-    }
-  }
-  
-  return shifts;
-};
+interface SupabaseShiftRow {
+  id: string;
+  user_id: string;
+  username: string;
+  date: string;
+  start_time: string;
+  end_time: string;
+  role?: string | null;
+  description?: string | null;
+}
 
 export default function PlanningPage() {
   const router = useRouter();
+  const { user } = useCurrentUser();
+  const userId = user?.id ?? null;
   const [isLoading, setIsLoading] = useState(true);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [username, setUsername] = useState<string>('');
-  const [fullName, setFullName] = useState<string>('');
   
   // State voor huidige maand
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
@@ -120,60 +85,30 @@ export default function PlanningPage() {
   const [availabilityMessage, setAvailabilityMessage] = useState<string>('');
 
   useEffect(() => {
-    // Check of gebruiker ingelogd is
-    const checkAuth = async () => {
-      const loggedIn = localStorage.getItem('isLoggedIn') === 'true';
-      const user = localStorage.getItem('username');
-      setIsLoggedIn(loggedIn);
-      setUsername(user || '');
-      
-      if (!loggedIn) {
-        router.push('/login');
-        return;
-      }
-      
-      // Haal volledige naam op
-      const storedUsers = localStorage.getItem('users');
-      if (storedUsers && user) {
-        const users = JSON.parse(storedUsers);
-        const userData = users.find((u: { username: string }) => u.username === user);
-        if (userData && userData.fullName) {
-          setFullName(userData.fullName);
-        }
-      }
-      
-      // Check of gebruiker admin is
-      const admin = await isAdmin();
-      if (admin) {
-        router.push('/admin');
-        return;
-      }
-      
-      // Laad diensten uit Supabase
-      await loadShifts();
-      setIsLoading(false);
-    };
-    
-    checkAuth();
-  }, [router]);
-
-  useEffect(() => {
-    // Laad diensten opnieuw wanneer maand verandert
-    if (isLoggedIn && !isLoading) {
-      loadShifts();
+    // Laad diensten voor de getoonde maand, en opnieuw zodra die verandert
+    if (!userId) {
+      return;
     }
+
+    let cancelled = false;
+
+    loadShifts().finally(() => {
+      if (!cancelled) {
+        setIsLoading(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentMonth]);
+  }, [currentMonth, userId]);
 
   /**
    * Laad alle diensten uit Supabase (niet alleen van ingelogde gebruiker)
    */
   const loadShifts = async () => {
-    const userId = getCurrentUserId();
     if (!userId) {
-      // Fallback naar mock data als geen userId
-      const mockShifts = generateMockShifts();
-      setShiftsData(mockShifts);
       return;
     }
 
@@ -202,9 +137,7 @@ export default function PlanningPage() {
 
       if (error) {
         console.error('Error loading shifts:', error);
-        // Fallback naar mock data bij error
-        const mockShifts = generateMockShifts();
-        setShiftsData(mockShifts);
+        setShiftsData(new Map());
         return;
       }
 
@@ -221,7 +154,7 @@ export default function PlanningPage() {
           return time;
         };
 
-        data.forEach((shift: any) => {
+        (data as SupabaseShiftRow[]).forEach((shift) => {
           const dateString = shift.date;
           if (!shiftsMap.has(dateString)) {
             shiftsMap.set(dateString, []);
@@ -259,9 +192,7 @@ export default function PlanningPage() {
       setShiftsData(shiftsMap);
     } catch (error) {
       console.error('Error:', error);
-      // Fallback naar mock data bij error
-      const mockShifts = generateMockShifts();
-      setShiftsData(mockShifts);
+      setShiftsData(new Map());
     }
   };
 
@@ -344,7 +275,6 @@ export default function PlanningPage() {
    * Check of een dienst van de ingelogde gebruiker is
    */
   const isMyShift = (shift: Shift): boolean => {
-    const userId = getCurrentUserId();
     return shift.user_id === userId;
   };
 
@@ -352,7 +282,6 @@ export default function PlanningPage() {
    * Haal beschikbaarheid op voor een specifieke dag
    */
   const loadAvailabilityForDay = async (date: Date) => {
-    const userId = getCurrentUserId();
     if (!userId) {
       setSelectedDayAvailability(null);
       return;
@@ -400,9 +329,7 @@ export default function PlanningPage() {
   const saveAvailability = async () => {
     if (!selectedDay) return;
     
-    const userId = getCurrentUserId();
-    const username = localStorage.getItem('username');
-    if (!userId || !username) return;
+    if (!user) return;
 
     const dateString = formatDateToString(selectedDay);
     const status: 'available' | null = selectedTimeSlots.length > 0 ? 'available' : null;
@@ -411,8 +338,8 @@ export default function PlanningPage() {
       const { error } = await supabase
         .from('availability')
         .upsert({
-          user_id: userId,
-          username: username,
+          user_id: user.id,
+          username: user.username,
           date: dateString,
           status: status,
           time_slots: selectedTimeSlots,
@@ -542,8 +469,8 @@ export default function PlanningPage() {
     );
   }
 
-  // Als niet ingelogd, toon loading (redirect wordt afgehandeld in useEffect)
-  if (!isLoggedIn) {
+  // Als niet ingelogd, toon loading (de middleware regelt de redirect)
+  if (!user) {
     return (
       <div className="min-h-screen bg-blue-50 flex items-center justify-center">
         <div className="text-center">
@@ -557,7 +484,6 @@ export default function PlanningPage() {
   // DAGDETAIL VIEW
   if (selectedDay) {
     const allShifts = getShiftsForDate(selectedDay);
-    const userId = getCurrentUserId();
     
     // Sorteer shifts op starttijd en dan op gebruikersnaam
     const sortedShifts = [...allShifts].sort((a, b) => {
@@ -569,7 +495,7 @@ export default function PlanningPage() {
     
     return (
       <div className="min-h-screen bg-blue-50 pb-24">
-        <UserHeader title="Rooster" username={username} fullName={fullName} />
+        <UserHeader title="Rooster" />
         <div className="max-w-2xl mx-auto px-4 py-6 sm:py-8 header-offset">
           {/* Header met terug knop */}
           <div className="mb-6">
@@ -867,7 +793,7 @@ export default function PlanningPage() {
 
   return (
     <div className="min-h-screen bg-blue-50 pb-24">
-      <UserHeader title="Rooster" username={username} fullName={fullName} />
+      <UserHeader title="Rooster" />
       <div className="max-w-4xl mx-auto px-4 py-6 sm:py-8 header-offset">
         {/* Beschrijving */}
         <div className="mb-6">
@@ -931,7 +857,6 @@ export default function PlanningPage() {
               const hasShifts = dayShifts.length > 0;
               const isTodayDate = isToday(day);
               const isCurrentMonthDate = isCurrentMonth(day);
-              const userId = getCurrentUserId();
               
               // Tel eigen shifts en andere shifts
               const myShifts = dayShifts.filter(s => s.user_id === userId);

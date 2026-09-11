@@ -1,71 +1,46 @@
+import { createBrowserClient } from '@supabase/ssr'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
-import { createClient, SupabaseClient } from '@supabase/supabase-js'
+/**
+ * Supabase-client voor de browser.
+ *
+ * De sessie wordt door @supabase/ssr in cookies gezet in plaats van in
+ * localStorage. Dat is nodig omdat middleware.ts en server components dezelfde
+ * sessie moeten kunnen lezen; anders kan de server niet controleren of iemand
+ * werkelijk is ingelogd.
+ */
 
-// Lazy initialization - only create client when actually accessed
-// This prevents errors during build when env vars might not be available
-let supabaseInstance: SupabaseClient | null = null
+let browserClient: SupabaseClient | null = null
 
-function getSupabaseClient(): SupabaseClient {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-  // If we have real env vars, use them (even if we already have a cached instance)
-  // This ensures runtime uses real values even if build created a placeholder
-  if (supabaseUrl && supabaseAnonKey) {
-    // If we already have an instance with real values, return it
-    if (supabaseInstance) {
-      return supabaseInstance
-    }
-    // Create new client with real values
-    supabaseInstance = createClient(supabaseUrl, supabaseAnonKey)
-    return supabaseInstance
+function getBrowserClient(): SupabaseClient {
+  if (browserClient) {
+    return browserClient
   }
 
-  // If we already have a cached instance (from build), return it
-  if (supabaseInstance) {
-    return supabaseInstance
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!url || !anonKey) {
+    throw new Error(
+      'NEXT_PUBLIC_SUPABASE_URL en NEXT_PUBLIC_SUPABASE_ANON_KEY ontbreken. ' +
+        'Zet ze in .env.local (lokaal) of in de omgevingsvariabelen van Vercel.'
+    )
   }
 
-  // During build, env vars might not be set - use placeholders
-  // This prevents build errors, but the client won't work until env vars are set
-  supabaseInstance = createClient(
-    'https://placeholder.supabase.co',
-    'placeholder-key'
-  )
-
-  return supabaseInstance
+  browserClient = createBrowserClient(url, anonKey)
+  return browserClient
 }
 
-// Export a proxy that lazily creates the client when accessed
+/**
+ * De client wordt pas aangemaakt bij het eerste gebruik. Tijdens het bouwen
+ * rendert Next.js client components vooruit, en dan zijn de omgevingsvariabelen
+ * er nog niet; een proxy voorkomt dat de build daarop stukloopt.
+ */
 export const supabase = new Proxy({} as SupabaseClient, {
   get(_target, prop) {
-    const client = getSupabaseClient()
-    const value = (client as any)[prop]
-    if (typeof value === 'function') {
-      return value.bind(client)
-    }
-    return value
-  }
+    const client = getBrowserClient()
+    const value = Reflect.get(client as object, prop) as unknown
+
+    return typeof value === 'function' ? value.bind(client) : value
+  },
 })
-
-// Helper om huidige gebruiker ID op te halen
-export function getCurrentUserId(): string | null {
-  if (typeof window === 'undefined') return null
-  return localStorage.getItem('userId')
-}
-
-// Helper om te checken of gebruiker admin is
-export async function isAdmin(): Promise<boolean> {
-  const userId = getCurrentUserId()
-  if (!userId) return false
-  
-  // Haal gebruiker op uit localStorage users array
-  const storedUsers = localStorage.getItem('users')
-  if (storedUsers) {
-    const users = JSON.parse(storedUsers)
-    const user = users.find((u: { id: string }) => u.id === userId)
-    // Later: check admin rol in database
-    return user?.role === 'admin' || false
-  }
-  return false
-}

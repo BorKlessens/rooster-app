@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase, isAdmin } from '@/lib/supabaseClient'
+import { supabase } from '@/lib/supabaseClient'
 import AdminHeader from '@/app/components/AdminHeader'
+import { useCurrentUser } from '@/app/components/UserProvider'
 
 /**
  * Admin Beschikbaarheid Overzicht pagina
@@ -27,11 +28,8 @@ interface AvailabilityRecord {
 
 export default function AdminAvailabilityPage() {
   const router = useRouter()
+  const { isAdmin: isAdminUser } = useCurrentUser()
   const [isLoading, setIsLoading] = useState(true)
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [isAdminUser, setIsAdminUser] = useState(false)
-  const [username, setUsername] = useState<string>('')
-  const [fullName, setFullName] = useState<string>('')
   const [availability, setAvailability] = useState<AvailabilityRecord[]>([])
   const [selectedDate, setSelectedDate] = useState(() => {
     const today = new Date()
@@ -42,48 +40,16 @@ export default function AdminAvailabilityPage() {
   })
   const [filterUsername, setFilterUsername] = useState('')
 
+  // De middleware laat alleen admins op deze route toe; dit is het vangnet.
   useEffect(() => {
-    const loggedIn = localStorage.getItem('isLoggedIn') === 'true'
-    const user = localStorage.getItem('username')
-    setIsLoggedIn(loggedIn)
-    setUsername(user || '')
-    
-    if (!loggedIn) {
-      router.push('/login')
+    if (!isAdminUser) {
+      router.replace('/home')
       return
     }
 
-    // Haal volledige naam op
-    const storedUsers = localStorage.getItem('users')
-    if (storedUsers && user) {
-      const users = JSON.parse(storedUsers)
-      const userData = users.find((u: { username: string }) => u.username === user)
-      if (userData && userData.fullName) {
-        setFullName(userData.fullName)
-      }
-    }
-
-    // Check admin status
-    checkAdmin()
-  }, [router])
-
-  useEffect(() => {
-    if (isAdminUser) {
-      loadAvailability()
-    }
+    loadAvailability().finally(() => setIsLoading(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate, filterUsername, isAdminUser])
-
-  const checkAdmin = async () => {
-    const admin = await isAdmin()
-    setIsAdminUser(admin)
-    
-    if (!admin) {
-      // Redirect naar home als geen admin
-      router.push('/home')
-    } else {
-      setIsLoading(false)
-    }
-  }
 
   const loadAvailability = async () => {
     setIsLoading(true)
@@ -184,7 +150,7 @@ export default function AdminAvailabilityPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
-      <AdminHeader title="Beschikbaarheid" username={username} fullName={fullName} />
+      <AdminHeader title="Beschikbaarheid" />
       <div className="max-w-6xl mx-auto px-4 py-6 sm:py-8 header-offset">
         {/* Header */}
         <div className="mb-4 sm:mb-6">

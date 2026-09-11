@@ -1,40 +1,19 @@
-'use client';
-
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { redirect } from 'next/navigation';
+import { getCurrentUser } from '@/lib/supabase/server';
 
 /**
- * Home pagina
- * 
- * Redirect automatisch naar welkomstpagina bij opstarten (als niet ingelogd)
- * Redirect naar dashboard als al ingelogd
+ * Startpagina
+ *
+ * Stuurt door naar de juiste plek op basis van de sessie. In de praktijk vangt
+ * middleware.ts dit al af; dit is het vangnet voor het geval een verzoek de
+ * middleware niet passeert.
  */
-export default function Home() {
-  const router = useRouter();
-  const [isLoading, setIsLoading] = useState(true);
+export default async function Home() {
+  const user = await getCurrentUser();
 
-  useEffect(() => {
-    // Check of gebruiker al ingelogd is
-    const isLoggedIn = typeof window !== 'undefined' && localStorage.getItem('isLoggedIn') === 'true';
-    setIsLoading(false);
-    
-    if (isLoggedIn) {
-      router.push('/home');
-    } else {
-      router.push('/welcome');
-    }
-  }, [router]);
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Bezig met laden...</p>
-      </div>
-    </div>
-  );
+  if (!user) {
+    redirect('/welcome');
   }
 
-  return null;
+  redirect(user.role === 'admin' ? '/admin' : '/home');
 }

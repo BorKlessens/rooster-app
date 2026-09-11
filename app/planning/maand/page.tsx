@@ -2,8 +2,9 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { supabase, getCurrentUserId } from '@/lib/supabaseClient';
+import { supabase } from '@/lib/supabaseClient';
 import UserHeader from '@/app/components/UserHeader';
+import { useCurrentUser } from '@/app/components/UserProvider';
 
 interface ShiftDetail {
   id: string;
@@ -19,11 +20,11 @@ interface ShiftDetail {
 function MaandOverzichtContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { user } = useCurrentUser();
+  const userId = user?.id ?? null;
   const [shifts, setShifts] = useState<ShiftDetail[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [username, setUsername] = useState<string>('');
-  const [fullName, setFullName] = useState<string>('');
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
 
   // Haal jaar en maand op uit query parameters of gebruik huidige maand
@@ -36,48 +37,20 @@ function MaandOverzichtContent() {
       const month = parseInt(monthParam) - 1; // JavaScript maanden zijn 0-indexed
       setCurrentMonth(new Date(year, month, 1));
     }
+  }, [searchParams]);
 
-    // Check of gebruiker ingelogd is
-    const loggedIn = localStorage.getItem('isLoggedIn') === 'true';
-    const user = localStorage.getItem('username');
-    setUsername(user || '');
-    
-    if (!loggedIn) {
-      router.push('/login');
-      return;
-    }
-    
-    // Haal volledige naam op
-    const storedUsers = localStorage.getItem('users');
-    if (storedUsers && user) {
-      const users = JSON.parse(storedUsers);
-      const userData = users.find((u: { username: string }) => u.username === user);
-      if (userData && userData.fullName) {
-        setFullName(userData.fullName);
-      }
-    }
-
-  }, [searchParams, router]);
-
-  // Laad diensten opnieuw wanneer maand verandert
+  // Laad diensten opnieuw wanneer maand of gebruiker verandert
   useEffect(() => {
-    if (username) { // Alleen laden als gebruiker is ingelogd
-      loadMonthShifts();
+    if (userId) {
+      loadMonthShifts(userId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentMonth]);
+  }, [currentMonth, userId]);
 
-  const loadMonthShifts = async () => {
+  const loadMonthShifts = async (userId: string) => {
     try {
       setIsLoading(true);
       setError(null);
-
-      const userId = getCurrentUserId();
-      if (!userId) {
-        setError('Gebruiker niet gevonden');
-        setIsLoading(false);
-        return;
-      }
 
       const year = currentMonth.getFullYear();
       const month = currentMonth.getMonth();
@@ -173,7 +146,7 @@ function MaandOverzichtContent() {
   if (error) {
     return (
       <div className="min-h-screen bg-blue-50 pb-24">
-        <UserHeader title="Maandoverzicht" username={username} fullName={fullName} />
+        <UserHeader title="Maandoverzicht" />
         <div className="max-w-4xl mx-auto px-4 py-6 sm:py-8 header-offset">
           <button
             onClick={() => router.back()}
@@ -194,7 +167,7 @@ function MaandOverzichtContent() {
 
   return (
     <div className="min-h-screen bg-blue-50 pb-24">
-      <UserHeader title="Maandoverzicht" username={username} fullName={fullName} />
+      <UserHeader title="Maandoverzicht" />
       <div className="max-w-4xl mx-auto px-4 py-6 sm:py-8 header-offset">
         {/* Terug knop */}
         <button

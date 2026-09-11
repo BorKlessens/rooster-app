@@ -2,7 +2,8 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { supabase, getCurrentUserId } from '@/lib/supabaseClient';
+import { supabase } from '@/lib/supabaseClient';
+import { useCurrentUser } from '@/app/components/UserProvider';
 
 interface ShiftDetail {
   id: string;
@@ -18,6 +19,7 @@ interface ShiftDetail {
 function DayDetailContent() {
   const router = useRouter();
   const params = useParams();
+  const { user } = useCurrentUser();
   const dateParam = params.date as string;
   
   const [shifts, setShifts] = useState<ShiftDetail[]>([]);
@@ -75,7 +77,7 @@ function DayDetailContent() {
     });
   };
 
-  const userId = getCurrentUserId();
+  const userId = user?.id ?? null;
 
   if (isLoading) {
     return (

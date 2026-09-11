@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { isAdmin, supabase, getCurrentUserId } from '@/lib/supabaseClient';
+import { supabase } from '@/lib/supabaseClient';
 import AdminHeader from '@/app/components/AdminHeader';
+import { useCurrentUser } from '@/app/components/UserProvider';
 
 /**
  * Admin Rooster pagina
@@ -29,13 +30,21 @@ interface User {
   fullName?: string;
 }
 
+interface SupabaseShiftRow {
+  id: string;
+  user_id: string;
+  username: string;
+  date: string;
+  start_time: string;
+  end_time: string;
+  role?: string | null;
+  description?: string | null;
+}
+
 export default function AdminRoosterPage() {
   const router = useRouter();
+  const { isAdmin: isAdminUser } = useCurrentUser();
   const [isLoading, setIsLoading] = useState(true);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [isAdminUser, setIsAdminUser] = useState(false);
-  const [username, setUsername] = useState<string>('');
-  const [fullName, setFullName] = useState<string>('');
   
   // State voor huidige maand
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
@@ -60,33 +69,11 @@ export default function AdminRoosterPage() {
   const [shiftToDelete, setShiftToDelete] = useState<Shift | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
+  // De middleware laat alleen admins op deze route toe; dit is het vangnet.
   useEffect(() => {
     const checkAuth = async () => {
-      const loggedIn = localStorage.getItem('isLoggedIn') === 'true';
-      const user = localStorage.getItem('username');
-      setIsLoggedIn(loggedIn);
-      setUsername(user || '');
-      
-      if (!loggedIn) {
-        router.push('/login');
-        return;
-      }
-      
-      // Haal volledige naam op
-      const storedUsers = localStorage.getItem('users');
-      if (storedUsers && user) {
-        const users = JSON.parse(storedUsers);
-        const userData = users.find((u: { username: string }) => u.username === user);
-        if (userData && userData.fullName) {
-          setFullName(userData.fullName);
-        }
-      }
-      
-      const admin = await isAdmin();
-      setIsAdminUser(admin);
-      
-      if (!admin) {
-        router.push('/home');
+      if (!isAdminUser) {
+        router.replace('/home');
         return;
       }
       
@@ -96,10 +83,11 @@ export default function AdminRoosterPage() {
     };
     
     checkAuth();
-  }, [router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdminUser]);
 
   useEffect(() => {
-    if (isLoggedIn && !isLoading && isAdminUser) {
+    if (isAdminUser && !isLoading) {
       loadShifts();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -174,7 +162,7 @@ export default function AdminRoosterPage() {
           return time;
         };
 
-        data.forEach((shift: any) => {
+        (data as SupabaseShiftRow[]).forEach((shift) => {
           const dateString = shift.date;
           if (!shiftsMap.has(dateString)) {
             shiftsMap.set(dateString, []);
@@ -418,7 +406,7 @@ export default function AdminRoosterPage() {
     );
   }
 
-  if (!isLoggedIn || !isAdminUser) {
+  if (!isAdminUser) {
     return (
       <div className="min-h-screen bg-blue-50 flex items-center justify-center">
         <div className="text-center">
@@ -442,7 +430,7 @@ export default function AdminRoosterPage() {
     
     return (
       <div className="min-h-screen bg-blue-50 pb-24">
-        <AdminHeader title="Rooster" username={username} fullName={fullName} />
+        <AdminHeader title="Rooster" />
         <div className="max-w-2xl mx-auto px-4 py-6 sm:py-8 header-offset">
           {/* Header met terug knop */}
           <div className="mb-6">
@@ -771,7 +759,7 @@ export default function AdminRoosterPage() {
 
   return (
     <div className="min-h-screen bg-blue-50 pb-24">
-      <AdminHeader title="Rooster" username={username} fullName={fullName} />
+      <AdminHeader title="Rooster" />
       <div className="max-w-4xl mx-auto px-4 py-6 sm:py-8 header-offset">
         {/* Header */}
         <div className="mb-6">

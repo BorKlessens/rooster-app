@@ -1,0 +1,56 @@
+name: Database backup
+
+# De gratis Supabase-tier heeft geen automatische backups en geen
+# point-in-time recovery. Deze workflow maakt elke nacht een dump en bewaart die
+# 90 dagen als artifact, zodat dataverlies beperkt blijft tot maximaal één dag.
+#
+# Benodigde repository secret:
+#   SUPABASE_DB_URL  De connection string uit het Supabase-dashboard onder
+#                    Project Settings, Database, Connection string, URI.
+#                    Gebruik de session pooler op poort 5432.
+
+on:
+  schedule:
+    # 03:15 UTC, buiten kantooruren.
+    - cron: '15 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    # pg_dump moet minstens even nieuw zijn als de server, anders weigert het.
+    # Deze image levert de client van PostgreSQL 17.
+    container: postgres:17-alpine
+
+    steps:
+      - name: Dump database
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${SUPABASE_DB_URL}" ]; then
+            echo "Secret SUPABASE_DB_URL is niet ingesteld."
+            exit 1
+          fi
+
+          mkdir -p backup
+          # Alleen het public schema: de auth-tabellen van Supabase zijn niet
+          # via deze verbinding te dumpen en worden door Supabase zelf beheerd.
+          pg_dump "${SUPABASE_DB_URL}" \
+            --schema=public \
+            --no-owner \
+            --no-privileges \
+            --clean \
+            --if-exists \
+            --file="backup/rooster-$(date -u +%Y-%m-%d).sql"
+
+          ls -lh backup
+
+      - name: Upload dump
+        uses: actions/upload-artifact@v4
+        with:
+          name: rooster-backup-${{ github.run_id }}
+          path: backup/
+          retention-days: 90
+          if-no-files-found: error

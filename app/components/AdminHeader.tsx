@@ -1,18 +1,17 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import Link from 'next/link';
+import { useCurrentUser } from '@/app/components/UserProvider';
 
 interface AdminHeaderProps {
   title: string;
-  username?: string;
-  fullName?: string;
 }
 
-export default function AdminHeader({ title, username, fullName }: AdminHeaderProps) {
-  const router = useRouter();
+export default function AdminHeader({ title }: AdminHeaderProps) {
   const pathname = usePathname();
+  const { user, signOut } = useCurrentUser();
   const [menuOpen, setMenuOpen] = useState(false);
 
   // Update body data attribute wanneer menu open/gesloten is
@@ -118,7 +117,7 @@ export default function AdminHeader({ title, username, fullName }: AdminHeaderPr
               </button>
             </div>
             <p className="text-sm text-gray-500 mt-1">
-              {getGreeting()} {fullName || username || 'Admin'}
+              {getGreeting()} {user?.fullName || user?.username || 'Admin'}
             </p>
           </div>
 
@@ -150,18 +149,8 @@ export default function AdminHeader({ title, username, fullName }: AdminHeaderPr
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                
-                // Verwijder alle localStorage items
-                localStorage.removeItem('isLoggedIn');
-                localStorage.removeItem('username');
-                localStorage.removeItem('userId');
-                
-                // Sluit het menu
                 setMenuOpen(false);
-                
-                // Navigeer naar login pagina
-                router.push('/login');
-                router.refresh(); // Forceer refresh om state te resetten
+                void signOut();
               }}
               className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-red-600 hover:bg-red-50 active:bg-red-100 transition-all duration-200 font-medium"
             >

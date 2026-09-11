@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState, useRef } from 'react';
-import { isAdmin } from '@/lib/supabaseClient';
+import { useCurrentUser } from '@/app/components/UserProvider';
 
 /**
  * Navigatie component voor de planning app
@@ -17,31 +17,16 @@ import { isAdmin } from '@/lib/supabaseClient';
  */
 export default function Navigation() {
   const pathname = usePathname();
-  const [userIsAdmin, setUserIsAdmin] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const { user, isAdmin: userIsAdmin } = useCurrentUser();
   const [menuOpen, setMenuOpen] = useState(false);
   const navRef = useRef<HTMLElement>(null);
   
   const isAdminPage = pathname?.startsWith('/admin') || false;
   const isLoginPage = pathname === '/login';
   const isWelcomePage = pathname === '/welcome';
-  const isSignUpPage = pathname === '/signup';
 
   // Bepaal of een link actief is
   const isActive = (path: string) => pathname === path;
-
-  // Check admin status
-  useEffect(() => {
-    const checkAdmin = async () => {
-      const loggedIn = localStorage.getItem('isLoggedIn') === 'true';
-      if (loggedIn) {
-        const admin = await isAdmin();
-        setUserIsAdmin(admin);
-      }
-      setIsLoading(false);
-    };
-    checkAdmin();
-  }, [pathname]);
 
   // Zorg ervoor dat de navbar altijd onderaan blijft op mobiel, zelfs tijdens scrollen
   useEffect(() => {
@@ -146,23 +131,14 @@ export default function Navigation() {
     updateTransform();
   }, [menuOpen]);
 
-  // Verberg navigatie op login, welcome en signup pagina's
-  if (isLoginPage || isWelcomePage || isSignUpPage) {
+  // Verberg navigatie op login- en welkomstpagina, en voor wie niet ingelogd is
+  if (isLoginPage || isWelcomePage || !user) {
     return null;
   }
 
-  // Als admin, toon alleen admin navigatie
-  if (userIsAdmin && !isAdminPage) {
-    return null; // Geen navigatie op gebruikerspagina's voor admins
-  }
-
-  // Verberg navigatie op admin pagina's (gebruik hamburger menu in plaats daarvan)
-  if (isAdminPage) {
-    return null;
-  }
-
-  // Als niet-admin, verberg navigatie op admin pagina's
-  if (!userIsAdmin && isAdminPage) {
+  // Op admin pagina's wordt het hamburger menu gebruikt in plaats van deze balk,
+  // en admins krijgen op gebruikerspagina's geen medewerkersnavigatie.
+  if (isAdminPage || userIsAdmin) {
     return null;
   }
 

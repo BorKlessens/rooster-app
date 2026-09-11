@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 // Script om service worker versie te genereren op basis van build tijd
 // Dit zorgt ervoor dat elke build een unieke cache name krijgt
 
@@ -21,6 +22,7 @@ swContent = swContent.replace(
 fs.writeFileSync(swPath, swContent, 'utf8');
 
 console.log(`Service Worker versie geüpdatet naar: ${version}`);
+
 
 
 

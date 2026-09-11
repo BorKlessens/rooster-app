@@ -1,18 +1,17 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { useEffect } from 'react';
-import { createAdminAccountIfNeeded } from '@/lib/createAdminAccount';
-import { isAdmin, supabase } from '@/lib/supabaseClient';
-import { verifyPassword } from '@/lib/passwordUtils';
+import { supabase } from '@/lib/supabaseClient';
+import { usernameToAuthEmail, validateUsername } from '@/lib/auth';
 
 /**
  * Login pagina
- * 
- * Inloggen van medewerkers en admins
- * Ondersteunt automatisch invullen via password managers (Google Wachtwoorden, etc.)
+ *
+ * Inloggen gebeurt met gebruikersnaam en wachtwoord via Supabase Auth. De
+ * gebruikersnaam wordt omgezet naar het interne auth-adres; zie lib/auth.ts.
+ * Ondersteunt automatisch invullen via password managers.
  */
 export default function LoginPage() {
   const router = useRouter();
@@ -34,10 +33,7 @@ export default function LoginPage() {
     document.documentElement.style.marginTop = '0';
     document.body.setAttribute('data-fullscreen-page', 'true');
     document.documentElement.setAttribute('data-fullscreen-page', 'true');
-    
-    // Zorg ervoor dat admin account bestaat (direct bij mount)
-    createAdminAccountIfNeeded().catch(console.error);
-    
+
     return () => {
       document.body.style.overflow = 'unset';
       document.documentElement.style.overflow = 'unset';
@@ -58,131 +54,28 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      // Zorg ervoor dat admin account bestaat voordat we proberen in te loggen
-      await createAdminAccountIfNeeded();
-      
-      const trimmedUsername = username.trim().toLowerCase();
-
-      // Probeer eerst in te loggen via Supabase
-      const { data: users, error: fetchError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('username', trimmedUsername)
-        .limit(1);
-
-      if (fetchError) {
-        console.error('Error fetching user:', fetchError);
-        // Fallback naar localStorage voor backward compatibility
-        const storedUsers = localStorage.getItem('users');
-        const localUsers = storedUsers ? JSON.parse(storedUsers) : [];
-        
-        const user = localUsers.find(
-          (u: { username: string; password: string }) => 
-            u.username.toLowerCase().trim() === trimmedUsername && u.password === password
-        );
-        
-        if (!user) {
-          setError('Gebruikersnaam of wachtwoord is onjuist.');
-          setIsLoading(false);
-          return;
-        }
-        
-        // Login succesvol (localStorage fallback)
-        localStorage.setItem('isLoggedIn', 'true');
-        localStorage.setItem('username', user.username);
-        localStorage.setItem('userId', user.id || user.username);
-        
-        const admin = await isAdmin();
-        if (admin) {
-          router.push('/admin');
-        } else {
-          router.push('/home');
-        }
-        return;
-      }
-
-      if (!users || users.length === 0) {
-        // Gebruiker niet gevonden in Supabase, probeer localStorage als fallback
-        const storedUsers = localStorage.getItem('users');
-        const localUsers = storedUsers ? JSON.parse(storedUsers) : [];
-        
-        const user = localUsers.find(
-          (u: { username: string; password: string }) => 
-            u.username.toLowerCase().trim() === trimmedUsername && u.password === password
-        );
-        
-        if (!user) {
-          setError('Gebruikersnaam of wachtwoord is onjuist.');
-          setIsLoading(false);
-          return;
-        }
-        
-        // Login succesvol (localStorage fallback)
-        localStorage.setItem('isLoggedIn', 'true');
-        localStorage.setItem('username', user.username);
-        localStorage.setItem('userId', user.id || user.username);
-        
-        const admin = await isAdmin();
-        if (admin) {
-          router.push('/admin');
-        } else {
-          router.push('/home');
-        }
-        return;
-      }
-
-      const user = users[0];
-
-      // Verifieer wachtwoord
-      if (!user.password_hash) {
-        setError('Account configuratie fout. Neem contact op met de beheerder.');
+      if (validateUsername(username)) {
+        setError('Gebruikersnaam of wachtwoord is onjuist.');
         setIsLoading(false);
         return;
       }
 
-      const isValidPassword = await verifyPassword(password, user.password_hash);
-      
-      if (!isValidPassword) {
-        setError('Wachtwoord is onjuist.');
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: usernameToAuthEmail(username),
+        password,
+      });
+
+      if (signInError) {
+        // Bewust één algemene melding, zodat niet te achterhalen is welke
+        // gebruikersnamen bestaan.
+        setError('Gebruikersnaam of wachtwoord is onjuist.');
         setIsLoading(false);
         return;
       }
 
-      // Login succesvol
-      localStorage.setItem('isLoggedIn', 'true');
-      localStorage.setItem('username', user.username);
-      localStorage.setItem('userId', user.id);
-
-      // Sla ook lokaal op voor backward compatibility
-      const storedUsers = localStorage.getItem('users');
-      const usersArray = storedUsers ? JSON.parse(storedUsers) : [];
-      const existingUserIndex = usersArray.findIndex((u: { id: string }) => u.id === user.id);
-      if (existingUserIndex === -1) {
-        usersArray.push({
-          id: user.id,
-          username: user.username,
-          fullName: user.full_name,
-          role: user.role,
-        });
-        localStorage.setItem('users', JSON.stringify(usersArray));
-      } else {
-        // Update bestaande gebruiker
-        usersArray[existingUserIndex] = {
-          id: user.id,
-          username: user.username,
-          fullName: user.full_name,
-          role: user.role,
-        };
-        localStorage.setItem('users', JSON.stringify(usersArray));
-      }
-
-      // Check of gebruiker admin is
-      const admin = await isAdmin();
-      if (admin) {
-        router.push('/admin');
-      } else {
-        router.push('/home');
-      }
+      // De middleware stuurt door naar /admin of /home op basis van de rol.
+      router.replace('/');
+      router.refresh();
     } catch (err) {
       console.error('Login error:', err);
       setError('Er is iets misgegaan. Probeer het opnieuw.');
@@ -281,19 +174,6 @@ export default function LoginPage() {
               </div>
             )}
 
-            {/* Test credentials voor docenten */}
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-xs sm:text-sm shadow-sm">
-              <div className="font-semibold text-blue-900 mb-2">Test accounts voor docenten:</div>
-              <div className="space-y-1.5 text-blue-800">
-                <div>
-                  <span className="font-medium">Gebruikersaccount:</span> Jan Jansen / <span className="font-mono">Jan123</span>
-                </div>
-                <div>
-                  <span className="font-medium">Admin account:</span> Admin / <span className="font-mono">admin</span>
-                </div>
-              </div>
-            </div>
-          
             <button
               type="submit"
               disabled={isLoading}
@@ -310,11 +190,15 @@ export default function LoginPage() {
                   'Inloggen'
                 )}
               </span>
-          </button>
+            </button>
+
+            <p className="text-center text-xs text-gray-600">
+              Wachtwoord vergeten of nog geen account? Neem contact op met je
+              leidinggevende.
+            </p>
           </form>
         </div>
       </div>
     </div>
   );
 }
-

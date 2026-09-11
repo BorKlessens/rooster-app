@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { isAdmin, supabase } from '@/lib/supabaseClient';
+import { supabase } from '@/lib/supabaseClient';
 import AdminHeader from '@/app/components/AdminHeader';
+import { useCurrentUser } from '@/app/components/UserProvider';
 
 /**
  * Admin Dashboard pagina
@@ -36,11 +37,8 @@ interface Stats {
 
 export default function AdminPage() {
   const router = useRouter();
+  const { isAdmin: isAdminUser } = useCurrentUser();
   const [isLoading, setIsLoading] = useState(true);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [isAdminUser, setIsAdminUser] = useState(false);
-  const [username, setUsername] = useState<string>('');
-  const [fullName, setFullName] = useState<string>('');
   
   // Data states
   const [stats, setStats] = useState<Stats>({
@@ -56,45 +54,12 @@ export default function AdminPage() {
     membersWithoutAvailability: 0,
   });
 
-  useEffect(() => {
-    const checkAuth = async () => {
-      const loggedIn = localStorage.getItem('isLoggedIn') === 'true';
-      const user = localStorage.getItem('username');
-      setIsLoggedIn(loggedIn);
-      setUsername(user || '');
-      
-      if (!loggedIn) {
-        router.push('/login');
-        return;
-      }
-      
-      // Haal volledige naam op
-      const storedUsers = localStorage.getItem('users');
-      if (storedUsers && user) {
-        const users = JSON.parse(storedUsers);
-        const userData = users.find((u: { username: string }) => u.username === user);
-        if (userData && userData.fullName) {
-          setFullName(userData.fullName);
-        }
-      }
-      
-      // Check admin status
-      const admin = await isAdmin();
-      setIsAdminUser(admin);
-      
-      if (!admin) {
-        // Redirect naar home als geen admin
-        router.push('/home');
-        return;
-      }
-      
-      // Laad alle data
-      await loadDashboardData();
-      setIsLoading(false);
-    };
-    
-    checkAuth();
-  }, [router]);
+  function formatDateToString(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
 
   const loadDashboardData = async () => {
     try {
@@ -234,13 +199,16 @@ export default function AdminPage() {
     }
   };
 
-  const formatDateToString = (date: Date): string => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
+  // De middleware laat alleen admins op deze route toe; dit is het vangnet.
+  useEffect(() => {
+    if (!isAdminUser) {
+      router.replace('/home');
+      return;
+    }
 
+    loadDashboardData().finally(() => setIsLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdminUser]);
 
   const formatTime = (time: string): string => {
     if (!time) return '';
@@ -285,7 +253,7 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
-      <AdminHeader title="Dashboard" username={username} fullName={fullName} />
+      <AdminHeader title="Dashboard" />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 header-offset">
 
         {/* Header beschrijving */}
@@ -322,7 +290,7 @@ export default function AdminPage() {
           {/* Vandaag's Shifts */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Vandaag's Shifts</h2>
+              <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Shifts van vandaag</h2>
               <Link
                 href="/admin/rooster"
                 className="text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors"

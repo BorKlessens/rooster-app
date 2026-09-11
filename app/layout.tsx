@@ -3,8 +3,9 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Navigation from "./components/Navigation";
 import MainContent from "./components/MainContent";
-import AdminAccountSetup from "./components/AdminAccountSetup";
+import UserProvider from "./components/UserProvider";
 import ServiceWorkerRegistration from "./components/ServiceWorkerRegistration";
+import { getCurrentUser } from "@/lib/supabase/server";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -29,32 +30,37 @@ export const metadata: Metadata = {
     icon: "/logo_200x200.png",
     apple: "/logo_200x200.png",
   },
-  themeColor: "#ffffff",
 };
 
 export const viewport: Viewport = {
-  width: 'device-width',
+  width: "device-width",
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  themeColor: "#ffffff",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // De sessie wordt hier server-side uit de cookies gelezen, zodat de app al
+  // bij de eerste render weet wie er is ingelogd.
+  const user = await getCurrentUser();
+
   return (
     <html lang="nl">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <ServiceWorkerRegistration />
-        <AdminAccountSetup />
-        <Navigation />
-        <MainContent>
-          {children}
-        </MainContent>
+        <UserProvider initialUser={user}>
+          <Navigation />
+          <MainContent>
+            {children}
+          </MainContent>
+        </UserProvider>
       </body>
     </html>
   );

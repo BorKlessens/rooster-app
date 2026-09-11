@@ -1,10 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { isAdmin } from '@/lib/supabaseClient';
 import UserHeader from '@/app/components/UserHeader';
+import { useCurrentUser } from '@/app/components/UserProvider';
 
 /**
  * Home pagina
@@ -18,49 +17,11 @@ import UserHeader from '@/app/components/UserHeader';
  */
 export default function HomePage() {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(true);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [username, setUsername] = useState<string | null>(null);
-  const [fullName, setFullName] = useState<string>('');
+  const { user } = useCurrentUser();
 
-  useEffect(() => {
-    // Check of gebruiker ingelogd is (alleen op client)
-    const checkAuth = async () => {
-      const loggedIn = localStorage.getItem('isLoggedIn') === 'true';
-      const user = localStorage.getItem('username');
-      setIsLoggedIn(loggedIn);
-      setUsername(user);
-      
-      if (!loggedIn) {
-        router.push('/login');
-        return;
-      }
-      
-      // Haal volledige naam op
-      const storedUsers = localStorage.getItem('users');
-      if (storedUsers && user) {
-        const users = JSON.parse(storedUsers);
-        const userData = users.find((u: { username: string }) => u.username === user);
-        if (userData && userData.fullName) {
-          setFullName(userData.fullName);
-        }
-      }
-      
-      // Check of gebruiker admin is
-      const admin = await isAdmin();
-      if (admin) {
-        router.push('/admin');
-        return;
-      }
-      
-      setIsLoading(false);
-    };
-    
-    checkAuth();
-  }, [router]);
-
-  // Toon loading state tijdens check (zowel server als client)
-  if (isLoading) {
+  // De middleware laat alleen ingelogde gebruikers hier komen; dit vangt de
+  // korte tussenstand op waarin de sessie net is beëindigd.
+  if (!user) {
     return (
       <div className="min-h-screen bg-blue-50 flex items-center justify-center">
         <div className="text-center">
@@ -71,20 +32,11 @@ export default function HomePage() {
     );
   }
 
-  // Als niet ingelogd, toon loading (redirect wordt afgehandeld in useEffect)
-  if (!isLoggedIn) {
-    return (
-      <div className="min-h-screen bg-blue-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-blue-700">Bezig met laden...</p>
-        </div>
-      </div>
-    );
-  }
-    return (
+  const displayName = user.fullName || user.username;
+
+  return (
     <div className="h-screen bg-blue-50 pb-20 overflow-hidden flex flex-col">
-      <UserHeader title="Home" username={username || undefined} fullName={fullName} />
+      <UserHeader title="Home" />
       <div className="w-full flex-1 flex flex-col relative">
         {/* Welkomsttekst in het midden met hero image */}
         <div className="flex-1 flex items-center justify-center relative header-offset">
@@ -110,7 +62,7 @@ export default function HomePage() {
           {/* Welkomsttekst */}
           <div className="text-center max-w-2xl relative z-10 px-4">
             <h2 className="text-xl sm:text-2xl font-bold text-blue-900 mb-3">
-              {fullName || username ? `Welkom ${fullName || username}!` : 'Welkom terug!'}
+              {displayName ? `Welkom ${displayName}!` : 'Welkom terug!'}
             </h2>
             <p className="text-sm sm:text-base text-blue-900 leading-relaxed">
               Welkom bij de Rooster App van de Elckerlyc. Geef je beschikbaarheid op en bekijk je rooster.

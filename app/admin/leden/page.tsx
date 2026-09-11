@@ -2,9 +2,9 @@
 
 import { useEffect, useState, FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase, isAdmin } from '@/lib/supabaseClient'
-import { hashPassword } from '@/lib/passwordUtils'
+import { supabase } from '@/lib/supabaseClient'
 import AdminHeader from '@/app/components/AdminHeader'
+import { useCurrentUser } from '@/app/components/UserProvider'
 
 /**
  * Admin Ledenlijst pagina
@@ -26,11 +26,8 @@ interface Member {
 
 export default function AdminLedenPage() {
   const router = useRouter()
+  const { isAdmin: isAdminUser } = useCurrentUser()
   const [isLoading, setIsLoading] = useState(true)
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [isAdminUser, setIsAdminUser] = useState(false)
-  const [username, setUsername] = useState<string>('')
-  const [fullName, setFullName] = useState<string>('')
   const [members, setMembers] = useState<Member[]>([])
   const [filterName, setFilterName] = useState('')
   const [sortBy, setSortBy] = useState<'name' | 'created'>('name')
@@ -50,53 +47,25 @@ export default function AdminLedenPage() {
   const [formPassword, setFormPassword] = useState('')
   const [formError, setFormError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  // Een aangemaakt account krijgt een tijdelijk wachtwoord dat de beheerder
+  // eenmalig te zien krijgt en zelf moet doorgeven.
+  const [temporaryPassword, setTemporaryPassword] = useState<string | null>(null)
 
+  // De middleware laat alleen admins op deze route toe; dit is het vangnet.
   useEffect(() => {
-    const loggedIn = localStorage.getItem('isLoggedIn') === 'true'
-    const user = localStorage.getItem('username')
-    setIsLoggedIn(loggedIn)
-    setUsername(user || '')
-    
-    if (!loggedIn) {
-      router.push('/login')
+    if (!isAdminUser) {
+      router.replace('/home')
       return
     }
 
-    // Haal volledige naam op
-    const storedUsers = localStorage.getItem('users')
-    if (storedUsers && user) {
-      const users = JSON.parse(storedUsers)
-      const userData = users.find((u: { username: string }) => u.username === user)
-      if (userData && userData.fullName) {
-        setFullName(userData.fullName)
-      }
-    }
-
-    checkAdmin()
-  }, [router])
-
-  useEffect(() => {
-    if (isAdminUser) {
-      loadMembers()
-    }
+    loadMembers()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterName, sortBy, isAdminUser])
-
-  const checkAdmin = async () => {
-    const admin = await isAdmin()
-    setIsAdminUser(admin)
-    
-    if (!admin) {
-      router.push('/home')
-    } else {
-      setIsLoading(false)
-    }
-  }
 
   const loadMembers = async () => {
     setIsLoading(true)
-    
+
     try {
-      // Probeer eerst met alle kolommen (inclusief email, phone, birthday)
       let query = supabase
         .from('users')
         .select('id, username, full_name, email, phone, birthday, role, created_at')
@@ -115,53 +84,15 @@ export default function AdminLedenPage() {
         query = query.order('username', { ascending: true })
       }
 
-      let { data, error } = await query
+      const { data, error } = await query
 
-      // Als error door ontbrekende kolommen (email, phone, birthday), probeer zonder die kolommen
-      if (error && (error.code === '42703' || error.code === 'PGRST116' || error.message?.includes('column') || error.message?.includes('does not exist'))) {
-        console.log('Extra kolommen (email/phone/birthday) bestaan nog niet, gebruik alleen basisvelden...')
-        
-        let fallbackQuery = supabase
-          .from('users')
-          .select('id, username, full_name, role, created_at')
-          .neq('role', 'admin')
-
-        if (filterName.trim()) {
-          const filterValue = `%${filterName.trim()}%`
-          fallbackQuery = fallbackQuery.or(`username.ilike.${filterValue},full_name.ilike.${filterValue}`)
-        }
-
-        if (sortBy === 'created') {
-          fallbackQuery = fallbackQuery.order('created_at', { ascending: false })
-        } else {
-          fallbackQuery = fallbackQuery.order('username', { ascending: true })
-        }
-
-        const { data: fallbackData, error: fallbackError } = await fallbackQuery
-        if (fallbackError) {
-          console.error('Error loading members (fallback):', fallbackError)
-          setMembers([])
-        } else {
-          console.log('✅ Members loaded (without email/phone/birthday):', fallbackData?.length || 0)
-          // Voeg null waarden toe voor ontbrekende kolommen
-          const membersWithNulls = (fallbackData || []).map((user: any) => ({
-            ...user,
-            email: null,
-            phone: null,
-            birthday: null
-          }))
-          setMembers(membersWithNulls)
-        }
-      } else if (error) {
+      if (error) {
         console.error('Error loading members:', error)
-        console.error('Error code:', error.code)
-        console.error('Error message:', error.message)
         setMembers([])
       } else {
-        console.log('✅ Members loaded (with all fields):', data?.length || 0)
         setMembers(data || [])
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Unexpected error:', error)
       setMembers([])
     } finally {
@@ -249,72 +180,49 @@ export default function AdminLedenPage() {
     resetForm()
   }
 
+  /**
+   * Accounts worden aangemaakt en gewijzigd via app/api/admin/users. Dat moet
+   * server-side gebeuren, omdat het aanmaken van een inlogaccount de service
+   * role key vereist en die nooit in de browser mag staan.
+   */
   const handleAddMember = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setFormError('')
     setIsSubmitting(true)
 
     try {
-      const normalizedUsername = formUsername.trim().toLowerCase()
-
-      // Validatie
-      if (!normalizedUsername) {
-        setFormError('Gebruikersnaam is verplicht')
-        setIsSubmitting(false)
-        return
-      }
-
-      if (!formPassword.trim()) {
-        setFormError('Wachtwoord is verplicht')
-        setIsSubmitting(false)
-        return
-      }
-
-      // Check of username al bestaat (case-insensitive opgeslagen als lowercase)
-      const { data: existingUsers } = await supabase
-        .from('users')
-        .select('id')
-        .eq('username', normalizedUsername)
-        .limit(1)
-
-      if (existingUsers && existingUsers.length > 0) {
-        setFormError('Deze gebruikersnaam is al in gebruik')
-        setIsSubmitting(false)
-        return
-      }
-
-      // Hash wachtwoord
-      const passwordHash = await hashPassword(formPassword)
-
-      // Maak nieuwe gebruiker
-      const { data: newUser, error } = await supabase
-        .from('users')
-        .insert({
-          username: normalizedUsername,
-          full_name: formFullName.trim() || formUsername.trim(),
-          email: formEmail.trim() || null,
-          phone: formPhone.trim() || null,
+      const response = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: formUsername,
+          fullName: formFullName,
+          email: formEmail,
+          phone: formPhone,
           birthday: formBirthday || null,
-          password_hash: passwordHash,
-          role: 'user',
-        })
-        .select()
-        .single()
+          password: formPassword.trim() || undefined,
+        }),
+      })
 
-      if (error) {
-        console.error('Error adding member:', error)
-        setFormError(`Fout bij toevoegen: ${error.message}`)
+      const result = await response.json()
+
+      if (!response.ok) {
+        setFormError(result.error ?? 'Toevoegen is mislukt')
         setIsSubmitting(false)
         return
       }
 
-      // Herlaad ledenlijst
       await loadMembers()
       setIsSubmitting(false)
       closeModals()
-    } catch (error: any) {
+
+      if (result.temporaryPassword) {
+        setTemporaryPassword(result.temporaryPassword)
+      }
+    } catch (error: unknown) {
       console.error('Unexpected error:', error)
-      setFormError(`Onverwachte fout: ${error.message}`)
+      const message = error instanceof Error ? error.message : 'Onbekende fout'
+      setFormError(`Onverwachte fout: ${message}`)
       setIsSubmitting(false)
     }
   }
@@ -330,84 +238,68 @@ export default function AdminLedenPage() {
     }
 
     try {
-      const normalizedUsername = formUsername.trim().toLowerCase()
-
-      // Validatie
-      if (!normalizedUsername) {
-        setFormError('Gebruikersnaam is verplicht')
-        setIsSubmitting(false)
-        return
-      }
-
-      // Check of username al bestaat (behalve voor huidige gebruiker)
-      if (normalizedUsername !== editingMember.username) {
-        const { data: existingUsers } = await supabase
-          .from('users')
-          .select('id')
-          .eq('username', normalizedUsername)
-          .limit(1)
-
-        if (existingUsers && existingUsers.length > 0) {
-          setFormError('Deze gebruikersnaam is al in gebruik')
-          setIsSubmitting(false)
-          return
-        }
-      }
-
-      // Update data object
-      // We slaan gebruikersnaam altijd in lowercase op zodat inloggen altijd case-insensitive werkt.
-      const updateData: any = {
-        username: normalizedUsername,
-        full_name: formFullName.trim() || formUsername.trim(),
-        email: formEmail.trim() || null,
-        phone: formPhone.trim() || null,
-        birthday: formBirthday || null,
-      }
-
-      // Alleen wachtwoord updaten als ingevuld
-      if (formPassword.trim()) {
-        const passwordHash = await hashPassword(formPassword)
-        updateData.password_hash = passwordHash
-      }
-
-      // Log wat we naar Supabase sturen (handig voor debuggen)
-      console.log('Updating member with data:', {
-        id: editingMember.id,
-        ...updateData,
+      const response = await fetch(`/api/admin/users/${editingMember.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: formUsername,
+          fullName: formFullName,
+          email: formEmail,
+          phone: formPhone,
+          birthday: formBirthday || null,
+          password: formPassword.trim() || undefined,
+        }),
       })
 
-      // Update gebruiker
-      const { error } = await supabase
-        .from('users')
-        .update(updateData)
-        .eq('id', editingMember.id)
+      const result = await response.json()
 
-      if (error) {
-        // Log zoveel mogelijk info over de Supabase error
-        console.error('Error updating member:', error)
-        try {
-          console.error('Error (stringified):', JSON.stringify(error))
-        } catch {
-          // negeer stringify-fouten
-        }
-
-        const message =
-          (typeof error.message === 'string' && error.message) ||
-          (typeof (error as any).hint === 'string' && (error as any).hint) ||
-          (typeof (error as any).details === 'string' && (error as any).details) ||
-          'Onbekende fout'
-
-        setFormError(`Fout bij bijwerken: ${message}`)
+      if (!response.ok) {
+        setFormError(result.error ?? 'Bijwerken is mislukt')
         setIsSubmitting(false)
         return
       }
 
-      // Herlaad ledenlijst
       await loadMembers()
       closeModals()
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Unexpected error:', error)
-      setFormError(`Onverwachte fout: ${error.message}`)
+      const message = error instanceof Error ? error.message : 'Onbekende fout'
+      setFormError(`Onverwachte fout: ${message}`)
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleDeleteMember = async () => {
+    if (!editingMember) return
+
+    const confirmed = window.confirm(
+      `Weet je zeker dat je het account van ${editingMember.full_name || editingMember.username} wilt verwijderen? ` +
+        'Ook de ingeplande diensten en beschikbaarheid van deze medewerker verdwijnen.'
+    )
+    if (!confirmed) return
+
+    setFormError('')
+    setIsSubmitting(true)
+
+    try {
+      const response = await fetch(`/api/admin/users/${editingMember.id}`, {
+        method: 'DELETE',
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        setFormError(result.error ?? 'Verwijderen is mislukt')
+        setIsSubmitting(false)
+        return
+      }
+
+      await loadMembers()
+      closeModals()
+    } catch (error: unknown) {
+      console.error('Unexpected error:', error)
+      const message = error instanceof Error ? error.message : 'Onbekende fout'
+      setFormError(`Onverwachte fout: ${message}`)
       setIsSubmitting(false)
     }
   }
@@ -429,7 +321,7 @@ export default function AdminLedenPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
-      <AdminHeader title="Ledenlijst" username={username} fullName={fullName} />
+      <AdminHeader title="Ledenlijst" />
       <div className="max-w-6xl mx-auto px-4 py-6 sm:py-8 header-offset">
         {/* Header */}
         <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
@@ -757,16 +649,19 @@ export default function AdminLedenPage() {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      Wachtwoord <span className="text-red-500">*</span>
+                      Wachtwoord
                     </label>
                     <input
                       type="password"
                       value={formPassword}
                       onChange={(e) => setFormPassword(e.target.value)}
-                      required
                       className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                      placeholder="Minimaal 6 tekens"
+                      placeholder="Leeglaten voor een automatisch wachtwoord"
                     />
+                    <p className="mt-1.5 text-xs text-gray-500">
+                      Minimaal 8 tekens. Laat je dit leeg, dan genereren we een
+                      tijdelijk wachtwoord dat je hierna eenmalig te zien krijgt.
+                    </p>
                   </div>
 
                   <div className="flex gap-3 pt-2">
@@ -888,7 +783,10 @@ export default function AdminLedenPage() {
                       className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                       placeholder="Laat leeg om niet te wijzigen"
                     />
-                    <p className="mt-1 text-xs text-gray-500">Laat leeg om het huidige wachtwoord te behouden</p>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Minimaal 8 tekens. Gebruik dit om een vergeten wachtwoord te
+                      resetten en geef het nieuwe wachtwoord zelf door.
+                    </p>
                   </div>
 
                   <div className="flex gap-3 pt-2">
@@ -908,8 +806,47 @@ export default function AdminLedenPage() {
                       {isSubmitting ? 'Bezig...' : 'Opslaan'}
                     </button>
                   </div>
+
+                  <div className="pt-2 border-t border-gray-200">
+                    <button
+                      type="button"
+                      onClick={handleDeleteMember}
+                      className="w-full px-4 py-2.5 text-sm font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={isSubmitting}
+                    >
+                      Account verwijderen
+                    </button>
+                  </div>
                 </form>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tijdelijk wachtwoord na het aanmaken van een account */}
+        {temporaryPassword && (
+          <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full border-2 border-blue-200 p-4 sm:p-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-2">
+                Account aangemaakt
+              </h2>
+              <p className="text-sm text-gray-600 mb-4">
+                Geef dit wachtwoord door aan de medewerker. Je kunt het hierna
+                niet meer opvragen; wel kun je via Bewerken een nieuw wachtwoord
+                instellen.
+              </p>
+              <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 mb-4">
+                <code className="text-lg font-mono text-gray-900 break-all">
+                  {temporaryPassword}
+                </code>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTemporaryPassword(null)}
+                className="w-full px-4 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Ik heb het genoteerd
+              </button>
             </div>
           </div>
         )}
