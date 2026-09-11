@@ -9,6 +9,38 @@ export default function ServiceWorkerRegistration() {
 
   useEffect(() => {
     if ('serviceWorker' in navigator) {
+      // In ontwikkeling registreren we de service worker niet, maar ruimen we
+      // hem juist op. Hij cachet de chunks van Turbopack, en die krijgen bij
+      // elke herstart van de dev-server andere namen. De browser vraagt dan
+      // bestanden op die niet meer bestaan: "Failed to load chunk".
+      if (process.env.NODE_ENV !== 'production') {
+        navigator.serviceWorker
+          .getRegistrations()
+          .then((registrations) => {
+            for (const existing of registrations) {
+              existing.unregister();
+            }
+          })
+          .catch(() => {
+            // Geen registraties om op te ruimen.
+          });
+
+        caches
+          ?.keys()
+          .then((keys) => {
+            for (const key of keys) {
+              if (key.startsWith('rooster-app-')) {
+                caches.delete(key);
+              }
+            }
+          })
+          .catch(() => {
+            // Cache API niet beschikbaar.
+          });
+
+        return;
+      }
+
       // Register service worker
       navigator.serviceWorker
         .register('/sw.js')
